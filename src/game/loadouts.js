@@ -13,7 +13,7 @@ export const STOCK_LOADOUTS = [
 const KEY = 'gb.save.v1';
 const DEFAULT_SAVE = {
   custom: [null, null, null],
-  settings: { sensitivity: 1.0, touchSensitivity: 1.0, invertY: false, quality: 'high', volume: 0.8, adsHold: true, fov: 75, name: null },
+  settings: { sensitivity: 1.0, touchSensitivity: 1.0, padSensitivity: 1.0, aimAssist: true, vibration: true, invertY: false, quality: 'high', volume: 0.8, adsHold: true, fov: 75, name: null },
   wallet: 1000,
   stats: { matches: 0, wins: 0, kills: 0, deaths: 0, bestStreak: 0, bets: 0, won: 0 },
 };

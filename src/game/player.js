@@ -1,7 +1,7 @@
 // Player controller: input -> movement, third-person over-the-shoulder camera, ADS, recoil, lean, equipment.
 import * as THREE from 'three';
 import { Actor } from './actor.js';
-import { clamp, damp, lerp } from '../core/rng.js';
+import { clamp, damp, lerp, dampAngle } from '../core/rng.js';
 import { ViewModel } from './viewmodel.js';
 import { SKIN_TONES } from './names.js';
 
@@ -42,6 +42,20 @@ export class Player extends Actor {
     const adsScale = this.adsBlend > 0.5 ? clamp(w.adsFov / this.fov, 0.25, 1) : 1;
     const sens = 0.0022 * this.sensitivity * adsScale;
     this.lastLook = input.look;
+    // controller aim assist: slowdown near enemies, and a short snap toward the closest one when you aim down sights
+    let assist = 1;
+    const aa = input.pad && m.settings.aimAssist !== false && !this.frozen && this.alive;
+    if (aa) {
+      const t = this._assistScan(0.02 + (this.ads ? 0.015 : 0));
+      if (t) assist = this.ads ? 0.45 : 0.6;
+      if (this.ads && !this._wasAds) { this._snap = this._assistScan(0.11); this._snapT = Math.max(0.12, w.adsTime); }
+      if (this._snap && this.ads && this._snapT > 0 && this._snap.alive) {
+        this._snapT -= dt; const eye = this.eye(new THREE.Vector3()); const c = this._snap.chest(new THREE.Vector3()).sub(eye);
+        this.yaw = dampAngle(this.yaw, Math.atan2(c.x, c.z), 9, dt); this.pitch += (Math.atan2(c.y, Math.hypot(c.x, c.z)) - this.pitch) * Math.min(1, dt * 9);
+      } else this._snap = null;
+    }
+    this._wasAds = this.ads;
+    input.look.dx *= assist; input.look.dy *= assist;
     if (!this.frozen && this.fx.stun <= 0) { this.yaw -= input.look.dx * sens; this.pitch -= input.look.dy * sens; }
     else if (!this.frozen) { this.yaw -= input.look.dx * sens * 0.3; this.pitch -= input.look.dy * sens * 0.3; }
     this.pitch = clamp(this.pitch, -1.35, 1.35);
@@ -59,7 +73,7 @@ export class Player extends Actor {
     if (P.has('lethal')) m.throwEquipment(this, 'lethal');
     if (P.has('tactical')) m.throwEquipment(this, 'tactical');
     for (let i = 0; i < 3; i++) if (P.has('streak' + (i + 1))) m.useStreak(this, i);
-    if (m.input.mobile) { if (P.has('peekR')) this.leanDir = this.leanDir ? 0 : 1; } else this.leanDir = input.peek;
+    if (m.input.mobile && !input.pad) { if (P.has('peekR')) this.leanDir = this.leanDir ? 0 : 1; } else this.leanDir = input.peek;
     this.lean = this.leanDir;
     // ADS
     const wantAds = input.ads && !this.frozen && this.swapT <= 0 && this.fx.stun <= 0;
@@ -93,11 +107,25 @@ export class Player extends Actor {
         this.kickP += w.recoilV * 0.01; this.kickY += (this.rng.next() - 0.5) * w.recoilH * 0.01;
         this.pitch += w.recoilV * 0.0035 * kickMult; // permanent climb (COD-like)
         this.view.onShot(w);
+        const heavy = w.type === 'shotgun' || w.type === 'sniper' || w.type === 'revolver';
+        m.input.rumble?.(heavy ? 0.55 : 0.2, heavy ? 0.9 : 0.3, heavy ? 140 : 55);
         this.camShake = Math.min(1, this.camShake + (w.type === 'sniper' || w.type === 'shotgun' ? 0.5 : 0.15));
       }
     } else if (trigger && this.weapon.mag === 0 && !this.reloading) { this.startReload(); }
     this.updateCommon(dt);
     this.updateCamera(dt, false);
+  }
+  /** Closest visible enemy inside the aim-assist cone (radians beyond the target's own angular size). */
+  _assistScan(extra) {
+    const m = this.match, cam = this.camera; const fwd = cam.getWorldDirection(new THREE.Vector3());
+    let best = null, bestA = Infinity;
+    for (const a of m.actors) {
+      if (a === this || !a.alive || m.sameTeam(a, this) || a.isDog) continue;
+      const c = a.chest(new THREE.Vector3()); const to = c.clone().sub(cam.position); const d = to.length(); if (d > 70 || d < 0.5) continue;
+      const ang = Math.acos(clamp(to.dot(fwd) / d, -1, 1)); const win = Math.atan(0.7 / d) + extra;
+      if (ang < win && ang < bestA && m.map.world.los(cam.position, c)) { bestA = ang; best = a; }
+    }
+    return best;
   }
   /** Aim point: ray from camera through screen centre, hitting world or actors. */
   computeAim() {

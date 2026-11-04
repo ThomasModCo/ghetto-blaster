@@ -6,6 +6,7 @@ import { streaksForMap } from '../game/streaks.js';
 import { MODES } from '../game/modes.js';
 import { sfx } from '../audio/sfx.js';
 import { weaponIcon, equipmentIcon, streakIcon } from './icons.js';
+import { btn } from './padglyphs.js';
 
 let engineRef = null;
 export function setEngine(e) { engineRef = e; }
@@ -128,10 +129,18 @@ export function showResults(result, match, payout, wallet, onAgain, onMenu) {
 export function closeDialog() { hide('screen-dialog'); }
 export function openDialog(title, bodyHtml, onClose) { show('screen-dialog'); $('dialog-title').textContent = title; $('dialog-body').innerHTML = bodyHtml; $('dialog-close').onclick = () => { sfx('click'); closeDialog(); onClose && onClose(); }; }
 
-export function openControls(mobile, onClose) {
-  const rows = mobile ? [['Move', 'Left joystick (push to the edge to sprint)'], ['Look', 'Drag anywhere on the right half'], ['Fire', 'Red button (drag it to aim while firing)'], ['ADS', 'ADS button (toggle)'], ['Jump / Duck / Peek', 'Buttons above fire'], ['Swap / Reload', 'Small buttons'], ['Lethal / Tactical', 'LETHAL and TAC buttons'], ['Score streaks', 'Tap the streak icons bottom-left'], ['Scoreboard', 'SCORE button at the top']]
-    : [['Move', '<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>'], ['Look / Fire / ADS', 'Mouse · <kbd>LMB</kbd> · <kbd>RMB</kbd>'], ['Sprint', '<kbd>SHIFT</kbd>'], ['Jump', '<kbd>SPACE</kbd>'], ['Duck', '<kbd>C</kbd> or <kbd>CTRL</kbd>'], ['Peek left / right', '<kbd>Q</kbd> / <kbd>E</kbd>'], ['Switch weapon', '<kbd>1</kbd> <kbd>2</kbd> or scroll / <kbd>V</kbd>'], ['Reload', '<kbd>R</kbd>'], ['Lethal / Tactical', '<kbd>G</kbd> / <kbd>F</kbd>'], ['Score streaks', '<kbd>3</kbd> <kbd>4</kbd> <kbd>5</kbd>'], ['Scoreboard', 'hold <kbd>TAB</kbd>'], ['Loadout (pre-game)', '<kbd>L</kbd>'], ['Pause / release mouse', '<kbd>ESC</kbd>']];
-  openDialog('CONTROLS', `<table class="controls-table">${rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>`, onClose);
+export function openControls(mobile, onClose, input = null) {
+  const touchRows = [['Move', 'Left joystick (push to the edge to sprint)'], ['Look', 'Drag anywhere on the right half'], ['Fire', 'Red button (drag it to aim while firing)'], ['ADS', 'ADS button (toggle)'], ['Jump / Duck / Peek', 'Buttons above fire'], ['Swap / Reload', 'Small buttons'], ['Lethal / Tactical', 'LETHAL and TAC buttons'], ['Score streaks', 'Tap the streak icons bottom-left'], ['Scoreboard', 'SCORE button at the top']];
+  const kbRows = [['Move', '<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>'], ['Look / Fire / ADS', 'Mouse · <kbd>LMB</kbd> · <kbd>RMB</kbd>'], ['Sprint', '<kbd>SHIFT</kbd>'], ['Jump', '<kbd>SPACE</kbd>'], ['Duck', '<kbd>C</kbd> or <kbd>CTRL</kbd>'], ['Peek left / right', '<kbd>Q</kbd> / <kbd>E</kbd>'], ['Switch weapon', '<kbd>1</kbd> <kbd>2</kbd> or scroll / <kbd>V</kbd>'], ['Reload', '<kbd>R</kbd>'], ['Lethal / Tactical', '<kbd>G</kbd> / <kbd>F</kbd>'], ['Score streaks', '<kbd>3</kbd> <kbd>4</kbd> <kbd>5</kbd>'], ['Scoreboard', 'hold <kbd>TAB</kbd>'], ['Loadout (pre-game)', '<kbd>L</kbd>'], ['Pause / release mouse', '<kbd>ESC</kbd>']];
+  const t = input ? input.padType : 'xbox'; const g = (n) => btn(t, n);
+  const padRows = [['Move', 'Left stick'], ['Look', 'Right stick'], ['Fire', g('RT')], ['Aim down sights', g('LT')], ['Sprint', `Click ${g('LS')}`], ['Jump', g('A')], ['Duck', g('B')], ['Reload', g('X')], ['Switch weapon', g('Y')], ['Lethal / Tactical', `${g('RB')} / ${g('LB')}`], ['Peek', `Hold ${g('RS')} (left stick picks the side)`], ['Score streaks', 'D-pad ◀ ▲ ▶'], ['Loadout (pre-game)', 'D-pad ▼'], ['Scoreboard', `Hold ${g('BACK')}`], ['Pause', g('START')], ['Menus', `D-pad or left stick, ${g('A')} select, ${g('B')} back`]];
+  const tabs = [[mobile ? 'TOUCH' : 'KEYBOARD & MOUSE', mobile ? touchRows : kbRows], ['CONTROLLER', padRows]];
+  let cur = input && input.padActive ? 1 : 0;
+  const render = () => {
+    $('dialog-body').innerHTML = `<div class="ctl-tabs">${tabs.map((tb, i) => `<button class="ctl-tab ${i === cur ? 'on' : ''}" data-i="${i}">${tb[0]}</button>`).join('')}</div>${cur === 1 ? '<div class="ctl-note">PS5 DualSense and Xbox controllers supported. Plug in or pair, then press any button.</div>' : ''}<table class="controls-table">${tabs[cur][1].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>`;
+    $('dialog-body').querySelectorAll('.ctl-tab').forEach((b) => { b.onclick = () => { cur = +b.dataset.i; sfx('click'); render(); }; });
+  };
+  openDialog('CONTROLS', '', onClose); render();
 }
 export function openSettings(settings, apply) {
   const s = settings;
@@ -139,6 +148,9 @@ export function openSettings(settings, apply) {
     <div class="setting"><label>Player name<small>Shown on the scoreboard</small></label><input type="text" id="st-name" maxlength="14" value="${s.name || ''}" placeholder="YOU"></div>
     <div class="setting"><label>Mouse sensitivity<small>${s.sensitivity.toFixed(2)}</small></label><input type="range" id="st-sens" min="0.2" max="3" step="0.05" value="${s.sensitivity}"></div>
     <div class="setting"><label>Touch sensitivity<small>${s.touchSensitivity.toFixed(2)}</small></label><input type="range" id="st-tsens" min="0.3" max="3" step="0.05" value="${s.touchSensitivity}"></div>
+    <div class="setting"><label>Controller sensitivity<small>${(s.padSensitivity ?? 1).toFixed(2)}</small></label><input type="range" id="st-psens" min="0.3" max="2.5" step="0.05" value="${s.padSensitivity ?? 1}"></div>
+    <div class="setting"><label>Aim assist<small>Controller only</small></label><div class="toggle" id="st-aa"><button class="${s.aimAssist !== false ? 'on' : ''}" data-v="1">ON</button><button class="${s.aimAssist === false ? 'on' : ''}" data-v="0">OFF</button></div></div>
+    <div class="setting"><label>Controller vibration</label><div class="toggle" id="st-vib"><button class="${s.vibration !== false ? 'on' : ''}" data-v="1">ON</button><button class="${s.vibration === false ? 'on' : ''}" data-v="0">OFF</button></div></div>
     <div class="setting"><label>Field of view<small>${s.fov}</small></label><input type="range" id="st-fov" min="60" max="100" step="1" value="${s.fov}"></div>
     <div class="setting"><label>Volume</label><input type="range" id="st-vol" min="0" max="1" step="0.05" value="${s.volume}"></div>
     <div class="setting"><label>Invert look</label><div class="toggle" id="st-inv"><button class="${!s.invertY ? 'on' : ''}" data-v="0">OFF</button><button class="${s.invertY ? 'on' : ''}" data-v="1">ON</button></div></div>
@@ -149,10 +161,11 @@ export function openSettings(settings, apply) {
   b.querySelector('#st-name').oninput = (e) => { s.name = e.target.value.trim().slice(0, 14) || null; };
   b.querySelector('#st-sens').oninput = (e) => { s.sensitivity = +e.target.value; e.target.previousElementSibling.querySelector('small').textContent = s.sensitivity.toFixed(2); };
   b.querySelector('#st-tsens').oninput = (e) => { s.touchSensitivity = +e.target.value; e.target.previousElementSibling.querySelector('small').textContent = s.touchSensitivity.toFixed(2); };
+  b.querySelector('#st-psens').oninput = (e) => { s.padSensitivity = +e.target.value; e.target.previousElementSibling.querySelector('small').textContent = s.padSensitivity.toFixed(2); apply(s); };
   b.querySelector('#st-fov').oninput = (e) => { s.fov = +e.target.value; e.target.previousElementSibling.querySelector('small').textContent = s.fov; };
   b.querySelector('#st-vol').oninput = (e) => { s.volume = +e.target.value; apply(s); };
   b.querySelector('#st-q').onchange = (e) => { s.quality = e.target.value; apply(s); };
-  for (const [id, key] of [['st-inv', 'invertY'], ['st-ads', 'adsHold']]) b.querySelector('#' + id).querySelectorAll('button').forEach((btn) => { btn.onclick = () => { s[key] = btn.dataset.v === '1'; btn.parentElement.querySelectorAll('button').forEach((x) => x.classList.remove('on')); btn.classList.add('on'); apply(s); }; });
+  for (const [id, key] of [['st-inv', 'invertY'], ['st-ads', 'adsHold'], ['st-aa', 'aimAssist'], ['st-vib', 'vibration']]) b.querySelector('#' + id).querySelectorAll('button').forEach((btn) => { btn.onclick = () => { s[key] = btn.dataset.v === '1'; btn.parentElement.querySelectorAll('button').forEach((x) => x.classList.remove('on')); btn.classList.add('on'); apply(s); }; });
 }
 export function openLoadoutEditor() {
   const save = getSave(); let slot = 0;

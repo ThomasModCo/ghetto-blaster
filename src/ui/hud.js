@@ -19,7 +19,7 @@ export class HUD {
     this.m = match; const p = match.player;
     match.events.kill = ({ victim, part }) => { this.hitmark(true); sfx('hit', { kill: true }); this.notify(part === 'head' ? `HEADSHOT ${victim.name}` : `KILLED ${victim.name}`, 100 + (part === 'head' ? 25 : 0), part === 'head' ? 'head' : 'kill'); };
     match.events.assist = ({ victim }) => { this.notify(`ASSIST ${victim.name}`, 25, 'assist'); };
-    match.events.death = ({ killer, weaponName }) => { this.message(killer ? `KILLED BY ${killer.name.toUpperCase()}` : 'YOU DIED', 2.5); this.dmgA = 1; };
+    match.events.death = ({ killer, weaponName }) => { match.input.rumble?.(0.7, 1, 420); this.message(killer ? `KILLED BY ${killer.name.toUpperCase()}` : 'YOU DIED', 2.5); this.dmgA = 1; };
     match.events.message = ({ text, dur }) => this.message(text, dur);
     match.events.streak = ({ def }) => { this.streakMsg(def.name); };
     match.events.scoreboard = (on) => onScoreboard(on);
@@ -27,7 +27,7 @@ export class HUD {
     match.events.pause = () => onPause();
     match.events.respawn = () => { this.dmgA = 0; };
     p.onHit = (actor, part, dmg) => { this.hitmark(false, part === 'head'); if (actor.health > 0) sfx('hit'); };
-    p.onDamaged = (amount, attacker, point) => { this.dmgA = Math.min(1, this.dmgA + amount / 60); sfx('hurt', { vol: 0.6 }); if (attacker) this.inds.push({ from: attacker.pos.clone(), t: 1.2 }); };
+    p.onDamaged = (amount, attacker, point) => { this.dmgA = Math.min(1, this.dmgA + amount / 60); sfx('hurt', { vol: 0.6 }); match.input.rumble?.(0.35, Math.min(1, 0.4 + amount / 80), 180); if (attacker) this.inds.push({ from: attacker.pos.clone(), t: 1.2 }); };
     p.onScore = () => { this.renderStreaks(); };
     this.el.classList.remove('hidden'); $('mobile-controls').classList.toggle('hidden', !match.input.mobile);
     $('btn-loadout').onclick = () => onOpenLoadout();
@@ -47,7 +47,7 @@ export class HUD {
     const bar = $('streaks-bar'); const st = this.m.streakState; const p = this.m.player;
     if (rebuild || bar.children.length !== 3) {
       bar.innerHTML = '';
-      st.picks.forEach((def, i) => { const d = document.createElement('div'); d.className = 'sk'; d.innerHTML = `<div class="fill"></div><span class="key">${this.m.input.mobile ? '' : i + 3}</span>${def ? `<img class="sk-ico" src="${streakIcon(def.effect, '#ffffff', 64)}" alt="">` : '<span class="nm">-</span>'}<span class="cost">${def ? def.cost : ''}</span>`; if (def) d.title = def.name; d.onclick = () => this.m.useStreak(p, i); bar.appendChild(d); });
+      st.picks.forEach((def, i) => { const d = document.createElement('div'); d.className = 'sk'; d.innerHTML = `<div class="fill"></div><span class="key kb">${this.m.input.mobile ? '' : i + 3}</span><span class="key pad">${['◀', '▲', '▶'][i]}</span>${def ? `<img class="sk-ico" src="${streakIcon(def.effect, '#ffffff', 64)}" alt="">` : '<span class="nm">-</span>'}<span class="cost">${def ? def.cost : ''}</span>`; if (def) d.title = def.name; d.onclick = () => this.m.useStreak(p, i); bar.appendChild(d); });
       this.readyFlags = [false, false, false];
     }
     st.picks.forEach((def, i) => { const d = bar.children[i]; if (!def) return; const ready = !st.used[i] && p.streakScore >= def.cost; const k = st.used[i] ? 0 : Math.min(1, p.streakScore / def.cost); d.querySelector('.fill').style.height = `${k * 100}%`; d.classList.toggle('ready', ready); d.style.opacity = st.used[i] ? 0.35 : 1; if (ready && !this.readyFlags[i]) { this.readyFlags[i] = true; this.streakMsg(def.name); sfx('ui'); } });

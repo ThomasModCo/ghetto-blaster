@@ -12,6 +12,8 @@ import { findStreak } from './game/streaks.js';
 import { HUD } from './ui/hud.js';
 import * as UI from './ui/menu.js';
 import { renderCovers } from './ui/covers.js';
+import { PadNav } from './ui/padnav.js';
+import { btn, padLabel } from './ui/padglyphs.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -19,6 +21,7 @@ const engine = new Engine(canvas);
 const input = new Input(canvas);
 const hud = new HUD();
 UI.setEngine(engine);
+const padNav = new PadNav(input);
 const save = getSave();
 let settings = save.settings;
 const params = new URLSearchParams(location.search);
@@ -35,6 +38,7 @@ window.addEventListener('resize', updateRotateHint); updateRotateHint();
 function applySettings(s) {
   settings = s; save.settings = s; persist();
   input.sensitivity = s.sensitivity; input.touchSensitivity = s.touchSensitivity; input.invertY = s.invertY; input.adsHold = s.adsHold;
+  input.padSensitivity = s.padSensitivity ?? 1; input.vibration = s.vibration !== false;
   setVolume(s.volume); engine.setQuality(s.quality);
   if (app.match && app.match.player) { app.match.player.fov = s.fov; app.match.player.sensitivity = 1; }
 }
@@ -159,7 +163,7 @@ function pauseMatch() {
   const openPause = () => {
     UI.openDialog('PAUSED', `<div class="pause-menu"><button class="menu-btn primary" id="p-resume">RESUME</button><button class="menu-btn" id="p-controls">CONTROLS</button><button class="menu-btn" id="p-settings">SETTINGS</button><button class="menu-btn danger" id="p-quit">QUIT MATCH</button></div>`, resume);
     $('p-resume').onclick = resume;
-    $('p-controls').onclick = () => { sfx('click'); UI.openControls(input.mobile, openPause); };
+    $('p-controls').onclick = () => { sfx('click'); UI.openControls(input.mobile, openPause, input); };
     $('p-settings').onclick = () => { sfx('click'); UI.openSettings(settings, (s2) => { applySettings(s2); }); $('dialog-close').onclick = () => { sfx('click'); applySettings(settings); openPause(); }; };
     $('p-quit').onclick = () => { UI.closeDialog(); quitMatch(); };
   };
@@ -180,6 +184,7 @@ function endMatch(res) {
 
 // ---------------- frame ----------------
 engine.onFrame = (dt) => {
+  input.updatePad(dt); padNav.update(dt);
   if (app.state === 'title' || app.state === 'modes') { if (app.match) { app.match.update(dt); updateCinematic(dt); } return; }
   if (app.state === 'lobby') { if (app.match) { updateCinematicLobby(dt); } return; }
   if (app.state === 'match' || app.state === 'results') {
@@ -193,11 +198,19 @@ function updateCinematicLobby(dt) { const cam = engine.camera; const pts = app.m
 
 // ---------------- title interactions ----------------
 $('screen-title').addEventListener('click', (e) => { if (e.target.closest('button')) return; if (app.state !== 'title') return; enterModes(); });
-$('screen-title').querySelectorAll('[data-open]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); initAudio(); sfx('click'); const k = b.dataset.open; if (k === 'controls') UI.openControls(input.mobile); else if (k === 'settings') UI.openSettings(settings, applySettings); else UI.openLoadoutEditor(); }; });
+$('screen-title').querySelectorAll('[data-open]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); initAudio(); sfx('click'); const k = b.dataset.open; if (k === 'controls') UI.openControls(input.mobile, null, input); else if (k === 'settings') UI.openSettings(settings, applySettings); else UI.openLoadoutEditor(); }; });
 document.querySelectorAll('[data-back]').forEach((b) => { b.onclick = () => { sfx('click'); UI.hideModes(); UI.showTitle(app.mapData.def.name, save.wallet); app.state = 'title'; }; });
 window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && app.state === 'modes') { UI.hideModes(); UI.showTitle(app.mapData.def.name, save.wallet); app.state = 'title'; } });
+// controller prompts and connection toast
+function updatePadPrompts() { $('title-cta').innerHTML = input.padActive ? `PRESS ${btn(input.padType, 'A')} TO PLAY` : (input.mobile ? 'TAP ANYWHERE TO PLAY' : 'CLICK ANYWHERE TO PLAY'); }
+window.addEventListener('padchange', () => { updatePadPrompts(); if (input.padActive) initAudio(); });
+let toastT = null;
+function toast(text) { const t = $('pad-toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200); }
+window.addEventListener('gamepadconnected', (e) => { const ps = /054c|dualsense|dualshock|playstation|ps5|ps4/i.test(e.gamepad.id); toast(`${padLabel(ps ? 'ps' : 'xbox')} CONTROLLER CONNECTED`); });
+window.addEventListener('gamepaddisconnected', () => { toast('CONTROLLER DISCONNECTED'); if (app.state === 'match' && app.match && app.match.state === 'live') pauseMatch(); });
+updatePadPrompts();
 // first touch anywhere unlocks audio
 window.addEventListener('pointerdown', () => initAudio(), { once: true });
 
-window.__gb = { app, engine, input, hud, save };
+window.__gb = { app, engine, input, hud, save, padNav };
 enterTitle();

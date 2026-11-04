@@ -1,4 +1,9 @@
-// Unified input for desktop (pointer lock + keyboard) and mobile (static joystick + drag look + buttons).
+// Unified input for desktop (pointer lock + keyboard), mobile (static joystick + drag look + buttons)
+// and game controllers (PS5 / Xbox via the Gamepad API, standard mapping).
+//
+// Standard mapping indices: 0 A/✕  1 B/○  2 X/□  3 Y/△  4 LB/L1  5 RB/R1  6 LT/L2  7 RT/R2
+// 8 View/Create  9 Menu/Options  10 LS/L3  11 RS/R3  12 Up  13 Down  14 Left  15 Right
+export const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, BACK: 8, START: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
 export const isTouch = () => ('ontouchstart' in window || navigator.maxTouchPoints > 0) && !window.matchMedia('(pointer:fine)').matches;
 
 export class Input {
@@ -18,6 +23,11 @@ export class Input {
     this.invertY = false;
     this.adsHold = true; // hold vs toggle
     this.crouchHold = false;
+    // gamepad state
+    this.pad = null; this.padType = 'xbox'; this.padActive = false;
+    this.padPrev = []; this.padValues = []; this.padJust = new Set(); this.padReleased = new Set(); this.padAxes = [0, 0, 0, 0];
+    this.padLook = { dx: 0, dy: 0 }; this.padSprint = false; this.padAds = false; this.padTurnT = 0;
+    this.padSensitivity = 1.0; this.vibration = true; this.menuActive = false;
     this._bind();
   }
   _bind() {
@@ -46,8 +56,55 @@ export class Input {
     c.addEventListener('contextmenu', (e) => e.preventDefault());
     c.addEventListener('wheel', (e) => { if (this.locked) this.pressed.add('swap'); }, { passive: true });
     if (this.mobile) this._bindTouch();
+    // switching back to mouse / keyboard / touch hands control back from the controller
+    window.addEventListener('mousemove', (e) => { if (this.padActive && Math.abs(e.movementX) + Math.abs(e.movementY) > 6) this._setPadActive(false); });
+    window.addEventListener('mousedown', () => { if (this.padActive) this._setPadActive(false); });
+    window.addEventListener('keydown', () => { if (this.padActive) this._setPadActive(false); });
+    window.addEventListener('touchstart', () => { if (this.padActive) this._setPadActive(false); }, { passive: true });
   }
-  requestLock() { if (!this.mobile && this.canvas.requestPointerLock) { try { this.canvas.requestPointerLock(); } catch (e) { /* ignore */ } } }
+  _setPadActive(on) {
+    if (this.padActive === on) return;
+    this.padActive = on;
+    document.body.classList.toggle('gamepad', on);
+    document.body.classList.toggle('pad-ps', on && this.padType === 'ps');
+    if (!on) { this.padSprint = false; this.padAds = false; this.padLook.dx = 0; this.padLook.dy = 0; }
+    window.dispatchEvent(new CustomEvent('padchange'));
+  }
+  /** Read the controller once per frame (before the match polls). Computes button edges and stick look. */
+  updatePad(dt) {
+    this.padJust.clear(); this.padReleased.clear();
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let gp = null;
+    for (const p of pads) if (p && p.connected && (!gp || p.timestamp > gp.timestamp)) gp = p;
+    this.pad = gp;
+    if (!gp) { if (this.padActive) this._setPadActive(false); this.padPrev = []; return; }
+    const type = /054c|dualsense|dualshock|playstation|ps5|ps4/i.test(gp.id) ? 'ps' : 'xbox';
+    if (type !== this.padType) { this.padType = type; if (this.padActive) { document.body.classList.toggle('pad-ps', type === 'ps'); window.dispatchEvent(new CustomEvent('padchange')); } }
+    const values = gp.buttons.map((b) => (typeof b === 'object' ? b.value : b));
+    const down = gp.buttons.map((b, i) => (typeof b === 'object' ? b.pressed || b.value > 0.5 : b > 0.5) && !((i === 6 || i === 7) && values[i] < 0.25));
+    for (let i = 0; i < down.length; i++) { if (down[i] && !this.padPrev[i]) this.padJust.add(i); if (!down[i] && this.padPrev[i]) this.padReleased.add(i); }
+    this.padPrev = down; this.padValues = values;
+    const ax = gp.axes; this.padAxes = [ax[0] || 0, ax[1] || 0, ax[2] || 0, ax[3] || 0];
+    const sticks = Math.hypot(this.padAxes[0], this.padAxes[1]) > 0.35 || Math.hypot(this.padAxes[2], this.padAxes[3]) > 0.35;
+    if (!this.padActive && (this.padJust.size || sticks || (values[6] || 0) > 0.3 || (values[7] || 0) > 0.3)) this._setPadActive(true);
+    // right stick look: radial deadzone, exponential response curve, turn boost at full deflection
+    if (!this.enabled || this.menuActive || !this.padActive) { this.padLook.dx = 0; this.padLook.dy = 0; this.padTurnT = 0; return; }
+    const rx = this.padAxes[2], ry = this.padAxes[3], len = Math.hypot(rx, ry), dz = 0.12;
+    if (len > dz) {
+      const m = Math.min(1, (len - dz) / (1 - dz)), curve = Math.pow(m, 1.9);
+      if (m > 0.93) this.padTurnT = Math.min(0.5, this.padTurnT + dt); else this.padTurnT = 0;
+      const boost = 1 + (Math.max(0, this.padTurnT - 0.12) / 0.38) * 0.7;
+      const rate = 3.4 * this.padSensitivity * curve * boost; // radians per second
+      this.padLook.dx += (rx / len) * rate * dt / 0.0022;
+      this.padLook.dy += (ry / len) * rate * 0.72 * dt / 0.0022;
+    } else this.padTurnT = 0;
+  }
+  rumble(weak, strong, ms) {
+    if (!this.vibration || !this.padActive || !this.pad) return;
+    const a = this.pad.vibrationActuator;
+    if (a && a.playEffect) { try { const r = a.playEffect('dual-rumble', { startDelay: 0, duration: ms, weakMagnitude: weak, strongMagnitude: strong }); if (r && r.catch) r.catch(() => {}); } catch (e) { /* unsupported */ } }
+  }
+  requestLock() { if (this.padActive || this.mobile || !this.canvas.requestPointerLock) return; try { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ } }
   releaseLock() { if (document.pointerLockElement) document.exitPointerLock(); }
   _bindTouch() {
     const joy = document.getElementById('joystick'), knob = document.getElementById('joy-knob'), look = document.getElementById('look-area');
@@ -117,10 +174,35 @@ export class Input {
       move: { x: this.move.x, y: this.move.y },
       look: { dx: this.look.dx * this.sensitivity * (this.mobile ? this.touchSensitivity : 1), dy: this.look.dy * this.sensitivity * (this.mobile ? this.touchSensitivity : 1) * (this.invertY ? -1 : 1) },
       fire: this.fire, ads: this.ads, sprint: this.sprint, peek: this.peek, jumpHeld: this.jumpHeld,
-      pressed: new Set(this.pressed),
+      pressed: new Set(this.pressed), pad: false,
     };
+    if (this.pad && this.padActive && this.enabled && !this.menuActive) this._padGameplay(snap);
     this.look.dx = 0; this.look.dy = 0; this.pressed.clear();
     return snap;
+  }
+  /** Standard FPS controller layout (COD style) mapped onto the same actions as keyboard / touch. */
+  _padGameplay(snap) {
+    const J = this.padJust, R = this.padReleased, held = this.padPrev, v = this.padValues, P = snap.pressed;
+    snap.pad = true;
+    // left stick: move (radial deadzone, rescaled)
+    const lx = this.padAxes[0], ly = this.padAxes[1], l = Math.hypot(lx, ly), dz = 0.15;
+    if (l > dz) { const m = Math.min(1, (l - dz) / (1 - dz)); snap.move.x = (lx / l) * m; snap.move.y = (-ly / l) * m; }
+    // L3 toggles sprint; it drops when you stop pushing forward
+    if (J.has(PAD.LS)) this.padSprint = !this.padSprint;
+    if (snap.move.y < 0.3) this.padSprint = false;
+    if (this.padSprint) snap.sprint = true;
+    // triggers
+    if ((v[PAD.RT] || 0) > 0.25) snap.fire = true;
+    if (this.adsHold) { if ((v[PAD.LT] || 0) > 0.25) snap.ads = true; } else { if (J.has(PAD.LT)) this.padAds = !this.padAds; if (this.padAds) snap.ads = true; }
+    // R3 held: peek, the left stick picks the side
+    if (held[PAD.RS]) snap.peek = lx < -0.35 ? -1 : 1;
+    snap.jumpHeld = snap.jumpHeld || !!held[PAD.A];
+    const map = [[PAD.A, 'jump'], [PAD.B, 'crouch'], [PAD.X, 'reload'], [PAD.Y, 'swap'], [PAD.LB, 'tactical'], [PAD.RB, 'lethal'], [PAD.LEFT, 'streak1'], [PAD.UP, 'streak2'], [PAD.RIGHT, 'streak3'], [PAD.DOWN, 'loadout'], [PAD.START, 'esc'], [PAD.BACK, 'score']];
+    for (const [b, action] of map) if (J.has(b)) P.add(action);
+    if (R.has(PAD.BACK)) P.add('scoreUp');
+    // right stick look (already in radians-equivalent pixels; independent of mouse sensitivity)
+    snap.look.dx += this.padLook.dx; snap.look.dy += this.padLook.dy * (this.invertY ? -1 : 1);
+    this.padLook.dx = 0; this.padLook.dy = 0;
   }
   setEnabled(on) { this.enabled = on; if (!on) { this.fire = false; this.ads = false; this.keys.clear(); this.move.x = 0; this.move.y = 0; } }
 }
