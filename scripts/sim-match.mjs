@@ -24,7 +24,7 @@ let fails = 0;
 for (let s = 0; s < seeds; s++) {
   const mapId = mapIds[s % mapIds.length]; const map = await getMap(mapId);
   const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 500);
-  const engine = { scene, camera, fx: fxStub, updateSunTarget: noop };
+  const engine = { scene, camera, fx: fxStub, updateSunTarget: noop, vmCamera: new THREE.PerspectiveCamera(), vmScene: new THREE.Scene() };
   const input = { poll: () => ({ move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 }, fire: false, ads: false, sprint: false, peek: 0, pressed: new Set() }), mobile: false, crouchHold: false };
   const seed = 1000 + s * 7919;
   const m = new Match({ engine, input, map, mode: MODES[modeId], settings: { fov: 75 }, seed, loadout: STOCK_LOADOUTS[s % 5], mapId, bet: 0, playerName: 'SIM' });

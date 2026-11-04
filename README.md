@@ -23,11 +23,11 @@ Install it as an app from the browser menu ("Add to Home Screen" on mobile). Pla
 
 ## Controls
 
-Desktop: WASD move, mouse look, LMB fire, RMB aim, Shift sprint, Space jump, C duck,
+Desktop: WASD move, mouse look, LMB fire, RMB aim, Shift sprint, Space jump, C duck (double-tap C to go prone, C while sprinting to slide),
 Q/E peek, 1/2/scroll swap, R reload, G lethal, F tactical, 3/4/5 streaks, Tab scoreboard, L loadout (pre-game).
 
 Controller (PS5 DualSense or Xbox, plug in or pair over Bluetooth, then press any button): left stick move, right stick look,
-R2/RT fire, L2/LT aim, L3/LS sprint, ✕/A jump, ○/B duck, □/X reload, △/Y switch weapon, R1/RB lethal, L1/LB tactical,
+R2/RT fire, L2/LT aim, L3/LS sprint, ✕/A jump, ○/B duck (double-tap for prone, while sprinting to slide), □/X reload, △/Y switch weapon, R1/RB lethal, L1/LB tactical,
 hold R3/RS to peek, D-pad ◀ ▲ ▶ streaks, D-pad ▼ loadout, Options/Menu pause, hold Create/View for the scoreboard.
 Every menu is navigable with the D-pad or left stick. Aim assist (slowdown plus ADS snap) and vibration can be toggled in settings.
 

@@ -64,6 +64,11 @@ export class ViewModel {
     pos.y -= rl * 0.1; rot.x += rl * (0.35 + wob); rot.z += rl * 0.3;
     // weapon swap: raise from below
     const sw = this.swapT / 0.35; pos.y -= sw * sw * 0.35; rot.x -= sw * 0.6;
+    // slide: gun tilts in and drops slightly; crawl: gun lowered, rocking with each pull
+    this.slideB = damp(this.slideB || 0, st.slide ? 1 : 0, 10, dt); this.crawlB = damp(this.crawlB || 0, st.crawl ? 1 : 0, 7, dt);
+    pos.x -= this.slideB * 0.05; pos.y -= this.slideB * 0.035; rot.z += this.slideB * 0.42; rot.y -= this.slideB * 0.08;
+    const cs = Math.sin(st.bobPhase * 0.5);
+    pos.y -= this.crawlB * (0.05 + Math.abs(cs) * 0.025); pos.x += this.crawlB * (0.02 + cs * 0.03); rot.x -= this.crawlB * 0.18; rot.z += this.crawlB * (0.28 + cs * 0.12);
     // sway, bob, recoil, lean
     pos.x += this.sway.x * (1 - ads * 0.6) + this.bob.x; pos.y += this.sway.y * (1 - ads * 0.6) + this.bob.y; pos.z += this.kick;
     rot.y += this.sway.x * 1.5 * (1 - ads * 0.5); rot.x += this.sway.y * 1.5 * (1 - ads * 0.5) + this.kickRot; rot.z += (st.lean || 0) * 0.06;

@@ -33,7 +33,17 @@ export class Player extends Actor {
   setLoadout(lo) { super.setLoadout(lo); if (this.view) this.view.setWeapon(this.weapon.def); }
   setSingleWeapon(w) { super.setSingleWeapon(w); if (this.view) this.view.setWeapon(w); }
   swapWeapon() { const before = this.cur; super.swapWeapon(); if (this.cur !== before && this.view) this.view.setWeapon(this.weapon.def); }
-  onSpawn() { this.yaw = this.body.yaw; this.pitch = 0; this.recoilP = 0; this.recoilY = 0; this.adsBlend = 0; this.crouchToggle = false; this.leanDir = 0; this.snapCamera = true; }
+  onSpawn() { this.yaw = this.body.yaw; this.pitch = 0; this.recoilP = 0; this.recoilY = 0; this.adsBlend = 0; this.crouchToggle = false; this.leanDir = 0; this.snapCamera = true; this.stance = 'stand'; this.slideT = -1; this.slideBlend = 0; this.lastDuckT = -9; }
+  get sliding() { return this.slideT >= 0; }
+  /** COD-style slide: duck while sprinting carries your momentum low along the ground, then settles into a crouch. */
+  startSlide() {
+    const m = this.match, v = this.body.vel, h = Math.hypot(v.x, v.z);
+    this.slideDir = h > 0.5 ? new THREE.Vector3(v.x / h, 0, v.z / h) : this.forward(new THREE.Vector3()).clone();
+    this.slideSpeed0 = Math.max(h, 6.5) * 1.4; this.slideT = 0; this.slideDur = 0.85; this.slideToProne = false;
+    const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw)); this.slideSide = this.slideDir.dot(right) > 0.2 ? -1 : 1;
+    this.stance = 'crouch'; this.sprint = false; this.kickP -= 0.02;
+    m.audio('whoosh', this, null, { vol: 0.9 }); m.input.rumble?.(0.35, 0.15, 300);
+  }
   update(dt, input) {
     const m = this.match;
     if (!this.alive) { this.deadT += dt; this.speed = 0; this.moving = false; this.updateCommon(dt); this.updateCamera(dt, true); return; }
@@ -66,8 +76,16 @@ export class Player extends Actor {
     this.body.yaw = this.yaw;
     // ---- actions ----
     const P = input.pressed;
-    if (P.has('crouch')) { if (m.input.crouchHold) this.body.wantCrouch = true; else this.crouchToggle = !this.crouchToggle; }
-    if (m.input.crouchHold) this.body.wantCrouch = !!input.crouchDown; else this.body.wantCrouch = this.crouchToggle;
+    // ---- stance: tap duck = crouch, quick double tap = prone, duck while sprinting = slide ----
+    if (this.stance === undefined) { this.stance = 'stand'; this.slideT = -1; this.slideBlend = 0; this.lastDuckT = -9; }
+    if (P.has('crouch') && !this.frozen) {
+      if (this.sliding) this.slideToProne = true;
+      else if (this.sprint && this.body.onGround && this.speed > 4.5) this.startSlide();
+      else if (m.time - this.lastDuckT < 0.32 && this.lastDuckResult === 'crouch' && this.stance === 'crouch') this.stance = 'prone';
+      else if (this.stance === 'prone') this.stance = 'crouch';
+      else this.stance = this.stance === 'crouch' ? 'stand' : 'crouch';
+      this.lastDuckT = m.time; this.lastDuckResult = this.stance;
+    }
     if (P.has('reload')) this.startReload();
     if (P.has('swap') || P.has('w1') || P.has('w2')) { if (P.has('w1') && this.cur !== 0) this.swapWeapon(); else if (P.has('w2') && this.cur !== 1) this.swapWeapon(); else if (P.has('swap')) this.swapWeapon(); }
     if (P.has('lethal')) m.throwEquipment(this, 'lethal');
@@ -78,8 +96,10 @@ export class Player extends Actor {
     // ADS
     const wantAds = input.ads && !this.frozen && this.swapT <= 0 && this.fx.stun <= 0;
     this.ads = wantAds;
-    this.sprint = input.sprint && input.move.y > 0.3 && !this.ads && !this.reloading && this.fx.stun <= 0;
-    if (this.sprint) this.crouchToggle = false, this.body.wantCrouch = m.input.crouchHold ? this.body.wantCrouch : false;
+    const crawling = this.body.prone && Math.hypot(input.move.x, input.move.y) > 0.15;
+    if (crawling) this.ads = false; // the weapon comes down while you crawl
+    this.sprint = input.sprint && input.move.y > 0.3 && !this.ads && !this.reloading && this.fx.stun <= 0 && !this.sliding;
+    if (this.sprint && this.stance !== 'stand') { this.stance = 'stand'; } // sprinting gets you up from crouch or prone
     // ---- movement ----
     const mv = input.move; const len = Math.hypot(mv.x, mv.y); const mx = len > 1 ? mv.x / len : mv.x, my = len > 1 ? mv.y / len : mv.y;
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
@@ -87,14 +107,27 @@ export class Player extends Actor {
     const base = this.sprint ? 7.2 : 5.3;
     let speed = base * this.effectiveSpeedMult();
     if (this.frozen) { _dir.set(0, 0, 0); speed = 0; }
-    const jump = P.has('jump') && !this.frozen && this.fx.stun <= 0 && this.fx.knock <= 0;
-    if (jump) { this.crouchToggle = false; this.body.wantCrouch = false; }
-    this.body.step(dt, _dir, speed, jump);
+    let jump = P.has('jump') && !this.frozen && this.fx.stun <= 0 && this.fx.knock <= 0;
+    if (jump && !this.sliding && this.stance === 'prone') { this.stance = 'crouch'; jump = false; } // jump from prone just gets you up a level
+    else if (jump) { if (this.sliding) this.slideT = -1; this.stance = 'stand'; }
+    let accel = 14;
+    if (this.sliding) {
+      this.slideT += dt; const k = Math.min(1, this.slideT / this.slideDur); const ease = 1 - (1 - k) * (1 - k);
+      speed = this.slideSpeed0 + (2.4 - this.slideSpeed0) * ease; accel = 40;
+      // a little steering from the stick, never a full turn
+      if (len > 0.2) { this.slideDir.lerp(new THREE.Vector3(_dir.x, 0, _dir.z).normalize(), Math.min(1, dt * 1.5)).normalize(); }
+      _dir.copy(this.slideDir);
+      if (this.match.fx._spawn && Math.random() < 0.5) this.match.fx._spawn(this.body.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.05, (Math.random() - 0.5) * 0.4)), new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.6, (Math.random() - 0.5) * 0.6), 0.6, 1.4, new THREE.Color(0.55, 0.52, 0.48), -0.4, 2.5);
+      const hv0 = Math.hypot(this.body.vel.x, this.body.vel.z);
+      if (k >= 1 || (this.slideT > 0.15 && hv0 < 1.2) || !this.body.onGround && this.slideT > 0.3) { this.slideT = -1; this.stance = this.slideToProne ? 'prone' : 'crouch'; }
+    }
+    this.body.wantProne = this.stance === 'prone'; this.body.wantCrouch = this.stance !== 'stand';
+    this.body.step(dt, _dir, speed, jump, accel);
     const hv = Math.hypot(this.body.vel.x, this.body.vel.z); this.speed = hv; this.moving = hv > 0.4 && (mx !== 0 || my !== 0);
     if (this.moving && this.body.onGround) { this.bobPhase += dt * hv * 1.6; if (Math.sin(this.bobPhase) > 0.98 && !this._stepped) { this._stepped = true; m.audio('step', this, null, { vol: this.sprint ? 0.9 : 0.5 }); } else if (Math.sin(this.bobPhase) < 0) this._stepped = false; }
     // ---- firing ----
     if (this.autoReloadT >= 0) { this.autoReloadT -= dt; if (this.autoReloadT < 0) { this.startReload(); } }
-    const trigger = input.fire && !this.frozen && this.fx.stun <= 0;
+    const trigger = input.fire && !this.frozen && this.fx.stun <= 0 && !crawling;
     if (trigger && this.sprint) this.sprint = false;
     const semiTrigger = w.auto ? trigger : (trigger && !this.lastFireHeld);
     this.lastFireHeld = trigger;
@@ -143,7 +176,8 @@ export class Player extends Actor {
     this.adsBlend = damp(this.adsBlend, this.ads && this.alive ? 1 : 0, adsRate * 3.5, dt);
     const scoped = !!w.scope && this.adsBlend > 0.9;
     this.scopeOverlay = scoped;
-    const targetFov = lerp(this.fov, w.adsFov, this.adsBlend) + (this.sprint ? 5 : 0);
+    this.slideBlend = damp(this.slideBlend || 0, this.sliding ? 1 : 0, this.sliding ? 12 : 5, dt);
+    const targetFov = lerp(this.fov, w.adsFov, this.adsBlend) + (this.sprint ? 5 : 0) + this.slideBlend * 9;
     this.curFov = damp(this.curFov, targetFov, 14, dt);
     if (Math.abs(cam.fov - this.curFov) > 0.05) { cam.fov = this.curFov; cam.updateProjectionMatrix(); }
     const eye = this.eye(new THREE.Vector3());
@@ -176,11 +210,12 @@ export class Player extends Actor {
     const shake = new THREE.Vector3((this.rng.next() - 0.5), (this.rng.next() - 0.5), 0).multiplyScalar(this.camShake * 0.03);
     cam.position.copy(this.camPos).add(bob).add(shake);
     cam.lookAt(cam.position.clone().add(fwd));
-    cam.rotateZ(-this.model.lean * 0.1 + this.kickY * 0.5 + Math.cos(this.bobPhase) * bobA * 0.3);
+    const crawlSway = this.body.prone && this.moving ? Math.sin(this.bobPhase * 0.5) * 0.025 : 0;
+    cam.rotateZ(-this.model.lean * 0.1 + this.kickY * 0.5 + Math.cos(this.bobPhase) * bobA * 0.3 + this.slideBlend * 0.13 * (this.slideSide || 1) + crawlSway);
     cam.rotateX(this.kickP * 0.6);
     cam.updateMatrixWorld();
     const vc = m.engine.vmCamera; vc.position.copy(cam.position); vc.quaternion.copy(cam.quaternion); vc.updateMatrixWorld(true);
-    this.view.update(dt, { ads: this.ads, sprint: this.sprint, moving: this.moving, speed: this.speed, onGround: this.body.onGround, reloading: this.reloading, reloadT: this.reloadT, reloadTime: w.reload, look: this.lastLook, bobPhase: this.bobPhase, dead: false, hidden: scoped, lean: this.model.lean });
+    this.view.update(dt, { ads: this.ads, sprint: this.sprint, moving: this.moving, speed: this.speed, onGround: this.body.onGround, reloading: this.reloading, reloadT: this.reloadT, reloadTime: w.reload, look: this.lastLook, bobPhase: this.bobPhase, dead: false, hidden: scoped, lean: this.model.lean, slide: this.sliding, crawl: this.body.prone && this.moving, prone: this.body.prone });
     m.engine.updateSunTarget(this.body.pos);
   }
 }

@@ -88,10 +88,10 @@ function updateCinematic(dt) {
 // staged cover shots for the mode panels (cached per map)
 const coverCache = new Map();
 function captureArts() {
-  if (coverCache.has(app.mapId)) return coverCache.get(app.mapId);
+  if (coverCache.has('covers')) return coverCache.get('covers');
   let arts;
-  try { arts = renderCovers(engine, app.mapData, hashString(app.mapId)); } catch (e) { console.warn('cover render failed', e); arts = []; }
-  coverCache.set(app.mapId, arts); return arts;
+  try { arts = renderCovers(engine); } catch (e) { console.warn('cover render failed', e); arts = []; }
+  coverCache.set('covers', arts); return arts;
 }
 
 // ---------------- modes ----------------

@@ -58,7 +58,7 @@ export function buildThrowableMesh(eq) {
 
 /** Humanoid rig. forward = +Z local. */
 export class CharacterModel {
-  constructor({ faction = 'gang', team = null, accent = null, rng, big = false }) {
+  constructor({ faction = 'gang', team = null, accent = null, rng, big = false, shirt: shirtColor = null, pants: pantsColor = null, hat: hatOverride = undefined }) {
     this.group = new THREE.Group();
     this.faction = faction;
     const skin = M(rng ? rng.pick(SKIN_TONES) : SKIN_TONES[2], 0.7);
@@ -68,6 +68,7 @@ export class CharacterModel {
     else if (faction === 'hitman') { shirt = M('#111', 0.7); pants = M('#111', 0.7); shoes = M('#111', 0.3, 0.3); headMat = skin; hat = 'glasses'; extra.push(['tie', M('#fff', 0.8)]); }
     else if (faction === 'sicario') { shirt = M('#1a1a1a', 0.95); pants = M('#5a5a3a', 0.95); shoes = M('#222', 0.8); headMat = M('#111', 0.95); extra.push(['vest', M('#4a5a3a', 0.95)]); }
     else { shirt = M('#4f7fbf', 0.9); pants = M('#1a2340', 0.9); shoes = M('#111', 0.5); headMat = skin; hat = 'cap'; extra.push(['badge', M('#ffd166', 0.3, 0.8)], ['belt', M('#111', 0.5)]); }
+    if (shirtColor) shirt = M(shirtColor, 0.9); if (pantsColor) pants = M(pantsColor, 0.9); if (hatOverride !== undefined) hat = hatOverride;
     this.accent = acc;
     const s = big ? 1.15 : 1;
     // hierarchy

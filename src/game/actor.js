@@ -42,9 +42,9 @@ export class Actor {
   eye(out = _v) { return out.set(this.body.pos.x, this.body.pos.y + this.body.eyeHeight(), this.body.pos.z); }
   chest(out = _v2) { return out.set(this.body.pos.x, this.body.pos.y + this.body.height * 0.55, this.body.pos.z); }
   forward(out = _q) { return out.set(Math.sin(this.body.yaw), 0, Math.cos(this.body.yaw)); }
-  effectiveSpeedMult() { let m = this.weapon.def.speedMult; if (this.ads) m *= this.weapon.def.adsSpeedMult; if (this.body.crouch) m *= 0.55; if (this.fx.speed > 0) m *= 1.25; if (this.fx.jugg > 0) m *= 0.8; if (this.fx.stun > 0 || this.fx.slow > 0) m *= 0.45; return m; }
+  effectiveSpeedMult() { let m = this.weapon.def.speedMult; if (this.ads) m *= this.weapon.def.adsSpeedMult; if (this.body.crouch) m *= 0.55; if (this.body.prone) m *= 0.42; if (this.fx.speed > 0) m *= 1.25; if (this.fx.jugg > 0) m *= 0.8; if (this.fx.stun > 0 || this.fx.slow > 0) m *= 0.45; return m; }
   spawn(pos, yaw) {
-    this.body.pos.set(pos.x, pos.y, pos.z); this.body.vel.set(0, 0, 0); this.body.yaw = yaw; this.pitch = 0; this.body.crouch = false; this.body.wantCrouch = false; this.body.height = this.body.standHeight;
+    this.body.pos.set(pos.x, pos.y, pos.z); this.body.vel.set(0, 0, 0); this.body.yaw = yaw; this.pitch = 0; this.body.crouch = false; this.body.wantCrouch = false; this.body.prone = false; this.body.wantProne = false; this.body.stance = 'stand'; this.body.height = this.body.standHeight;
     this.health = this.maxHealth; this.armor = 0; this.alive = true; this.deadT = 0; this.respawnT = 0; this.killStreak = 0; this.streakScore = 0;
     for (const w of this.weapons) { w.mag = w.def.mag; w.reserve = w.def.reserve; }
     this.equip.tactical.count = this.equip.tactical.def.count; this.equip.lethal.count = this.equip.lethal.def.count;
@@ -88,7 +88,7 @@ export class Actor {
     w.mag--; this.lastShotT = this.match.time; this.firing = true;
     const moveFactor = this.moving ? d.spreadMove * clamp(this.speed / 6, 0, 1) : 0;
     let spread = (this.ads ? d.spreadAds : d.spreadHip) + moveFactor * (this.ads ? 0.3 : 1) + (this.body.onGround ? 0 : 1.5);
-    spread *= accuracyMult * (this.body.crouch ? 0.8 : 1);
+    spread *= accuracyMult * (this.body.prone ? 0.6 : this.body.crouch ? 0.8 : 1);
     const spreadRad = (spread * Math.PI) / 180;
     const muzzle = this.muzzleWorld(new THREE.Vector3());
     for (let p = 0; p < d.pellets; p++) {

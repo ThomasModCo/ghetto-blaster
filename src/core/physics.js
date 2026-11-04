@@ -169,7 +169,8 @@ export class Body {
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
     this.radius = 0.36;
-    this.standHeight = 1.8; this.crouchHeight = 1.25;
+    this.standHeight = 1.8; this.crouchHeight = 1.25; this.proneHeight = 0.6;
+    this.stance = 'stand'; this.prone = false; this.wantProne = false;
     this.height = 1.8;
     this.onGround = false;
     this.crouch = false;
@@ -180,13 +181,17 @@ export class Body {
   // moveDir: world-space XZ vector (not necessarily normalized), speed: target m/s
   step(dt, moveDir, speed, jump, accelGround = 14, accelAir = 3) {
     const w = this.world;
-    // crouch transitions (stand up only if head room)
-    if (this.wantCrouch !== this.crouch) {
-      if (this.wantCrouch) this.crouch = true;
-      else if (w.ceilingAt(this.pos.x, this.pos.z, this.pos.y + 0.1, this.radius) - this.pos.y > this.standHeight + 0.05) this.crouch = false;
+    // stance transitions: going down is instant, going up needs head room
+    const H = { stand: this.standHeight, crouch: this.crouchHeight, prone: this.proneHeight };
+    const want = this.wantProne ? 'prone' : this.wantCrouch ? 'crouch' : 'stand';
+    if (want !== this.stance) {
+      if (H[want] <= H[this.stance]) this.stance = want;
+      else if (w.ceilingAt(this.pos.x, this.pos.z, this.pos.y + 0.1, this.radius) - this.pos.y > H[want] + 0.05) this.stance = want;
     }
-    const targetH = this.crouch ? this.crouchHeight : this.standHeight;
-    this.height += (targetH - this.height) * Math.min(1, dt * 14);
+    this.crouch = this.stance !== 'stand'; this.prone = this.stance === 'prone';
+    const targetH = H[this.stance];
+    const rate = this.prone || this.height < this.crouchHeight - 0.05 ? 6.5 : 14; // getting down to / up from prone takes longer
+    this.height += (targetH - this.height) * Math.min(1, dt * rate);
 
     const tx = moveDir.x * speed, tz = moveDir.z * speed;
     const accel = this.onGround ? accelGround : accelAir;
