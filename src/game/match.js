@@ -13,6 +13,8 @@ import { buildGunMesh } from './character.js';
 
 const _v = new THREE.Vector3(), _r = new THREE.Vector3();
 const BITE = { id: 'bite', name: 'BITE', type: 'melee', slot: 'primary', damage: 55, rpm: 110, mag: 9999, reserve: 0, reload: 1, rangeFull: 2.2, rangeMin: 2.6, minDamage: 0, auto: true, pellets: 1, headshot: 1, adsTime: 0.1, adsFov: 70, speedMult: 1.5, adsSpeedMult: 1, spreadHip: 4, spreadAds: 4, spreadMove: 0, recoilV: 0, recoilH: 0, recoilRecover: 10, sound: 'none', suppressed: true, swapTime: 0.1, tracer: false, model: { len: 0.01, h: 0.01, barrel: 0, mag: 0, stock: 0, pistol: true, color: '#000' } };
+const NO_TACTICAL = { id: 'none', name: 'NONE', count: 0, passive: false };
+const NO_LETHAL = { id: 'none', name: 'NONE', count: 0, passive: false };
 const SENTRY = { ...WEAPONS.ratchet, id: 'sentry', name: 'SENTRY', mag: 9999, reserve: 0, speedMult: 0 };
 
 export class Match {
@@ -53,7 +55,10 @@ export class Match {
       b.level = rng.int(3, 120); b.ping = rng.int(18, 95);
       this.actors.push(b); this.bots.push(b);
     }
-    if (mode.id === 'gungame') for (const a of this.actors) { a.gunGameIndex = 0; a.setSingleWeapon(WEAPONS[GUN_GAME_ORDER[0]]); }
+    if (mode.id === 'gungame') for (const a of this.actors) { // no loadouts in gun game: same starting pistol, no equipment
+      a.gunGameIndex = 0; a.setSingleWeapon(WEAPONS[GUN_GAME_ORDER[0]]);
+      a.equip = { tactical: { def: NO_TACTICAL, count: 0 }, lethal: { def: NO_LETHAL, count: 0 } };
+    }
     // initial spawns
     for (const a of this.actors) this.spawnActor(a, true);
     if (this.player) this.player.frozen = true;

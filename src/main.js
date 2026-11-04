@@ -143,26 +143,43 @@ function startMatch() {
   document.addEventListener('pointerlockchange', onLockChange);
 }
 function onLockChange() { if (app.state === 'match' && !document.pointerLockElement && !input.mobile && app.match && app.match.state === 'live' && $('screen-loadout').classList.contains('hidden') && $('screen-dialog').classList.contains('hidden')) pauseMatch(); }
-function openLoadout() {
+function openLoadout(midMatch = false) {
   const m = app.match; if (!m || m.state === 'ended') return;
   input.releaseLock();
-  UI.showLoadoutSelector(app.mapId, app.pick, (pick) => { app.pick = pick; applyPick(); }, () => { if (m.state !== 'pregame') { /* already live */ } if (!input.mobile) input.requestLock(); });
+  const gunGame = m.mode.id === 'gungame';
+  const before = { loadout: m.player.nextLoadout?.id || m.player.loadout.id, streaks: (m.player.nextStreaks || m.streakState.picks).map((d) => d && d.id).join() };
+  app.midLoadout = midMatch;
+  UI.showLoadoutSelector(app.mapId, app.pick, (pick) => { app.pick = pick; applyPick(); }, () => {
+    if (midMatch) {
+      app.midLoadout = false; input.setEnabled(true);
+      const changed = (!gunGame && app.pick.loadoutId !== before.loadout) || (app.pick.streaks || []).join() !== before.streaks;
+      if (changed && m.player.alive) hud.message('CHANGES APPLY ON NEXT SPAWN', 2.2);
+    }
+    if (!input.mobile) input.requestLock();
+  }, { gunGame });
+  if (midMatch) $('loadout-timer').textContent = m.player.alive ? 'APPLIES ON NEXT SPAWN' : 'APPLIES ON RESPAWN';
 }
 function applyPick() {
   const m = app.match; if (!m) return;
-  const lo = allLoadouts().find((l) => l.id === app.pick.loadoutId) || allLoadouts()[0];
-  if (m.state === 'pregame') m.player.setLoadout(resolveLoadout(lo)); else m.player.nextLoadout = resolveLoadout(lo);
-  m.streakState.picks = (app.pick.streaks || []).map((id) => findStreak(app.mapId, id));
-  hud.renderStreaks(true);
+  const pregame = m.state === 'pregame';
+  if (m.mode.id !== 'gungame') { // gun game never takes a loadout
+    const lo = allLoadouts().find((l) => l.id === app.pick.loadoutId) || allLoadouts()[0];
+    const r = resolveLoadout(lo);
+    if (pregame) m.player.setLoadout(r); else m.player.nextLoadout = r.id === m.player.loadout.id ? null : r;
+  }
+  const streaks = (app.pick.streaks || []).map((id) => findStreak(app.mapId, id));
+  if (pregame) { m.streakState.picks = streaks; hud.renderStreaks(true); }
+  else m.player.nextStreaks = streaks.every((d, i) => d === m.streakState.picks[i]) ? null : streaks;
 }
 function pauseMatch() {
   if (app.state !== 'match' || !app.match || app.match.state === 'ended') return;
   if (!$('screen-dialog').classList.contains('hidden')) return;
-  input.setEnabled(false);
+  input.setEnabled(false); input.releaseLock(); // free the mouse so the pause menu can be clicked however the pause was triggered
   const resume = () => { UI.closeDialog(); input.setEnabled(true); if (!input.mobile) input.requestLock(); };
   const openPause = () => {
-    UI.openDialog('PAUSED', `<div class="pause-menu"><button class="menu-btn primary" id="p-resume">RESUME</button><button class="menu-btn" id="p-controls">CONTROLS</button><button class="menu-btn" id="p-settings">SETTINGS</button><button class="menu-btn danger" id="p-quit">QUIT MATCH</button></div>`, resume);
+    UI.openDialog('PAUSED', `<div class="pause-menu"><button class="menu-btn primary" id="p-resume">RESUME</button>${app.match.mode.id === 'gungame' ? '' : '<button class="menu-btn" id="p-loadout">LOADOUT</button>'}<button class="menu-btn" id="p-controls">CONTROLS</button><button class="menu-btn" id="p-settings">SETTINGS</button><button class="menu-btn danger" id="p-quit">QUIT MATCH</button></div>`, resume);
     $('p-resume').onclick = resume;
+    if ($('p-loadout')) $('p-loadout').onclick = () => { sfx('click'); UI.closeDialog(); openLoadout(true); };
     $('p-controls').onclick = () => { sfx('click'); UI.openControls(input.mobile, openPause, input); };
     $('p-settings').onclick = () => { sfx('click'); UI.openSettings(settings, (s2) => { applySettings(s2); }); $('dialog-close').onclick = () => { sfx('click'); applySettings(settings); openPause(); }; };
     $('p-quit').onclick = () => { UI.closeDialog(); quitMatch(); };
@@ -189,9 +206,9 @@ engine.onFrame = (dt) => {
   if (app.state === 'lobby') { if (app.match) { updateCinematicLobby(dt); } return; }
   if (app.state === 'match' || app.state === 'results') {
     const m = app.match; if (!m) return;
-    if (app.state === 'match' && !$('screen-dialog').classList.contains('hidden')) { /* paused: freeze */ return; }
+    if (app.state === 'match' && (!$('screen-dialog').classList.contains('hidden') || app.midLoadout)) { /* paused (menu or mid-match loadout): freeze */ return; }
     m.update(dt);
-    if (app.state === 'match') { hud.update(dt); if (m.state === 'pregame') UI.loadoutTimer(m.pregameT); if (m.player.nextLoadout && m.player.alive && m.player.spawnProtect > 1.9) { m.player.setLoadout(m.player.nextLoadout); m.player.nextLoadout = null; } }
+    if (app.state === 'match') { hud.update(dt); if (m.state === 'pregame') UI.loadoutTimer(m.pregameT); }
   }
 };
 function updateCinematicLobby(dt) { const cam = engine.camera; const pts = app.match.map.cinematicPoints; const p = pts[0] || { x: 40, y: 20, z: 40, lookX: 0, lookZ: 0 }; const t = performance.now() / 1000; const r = Math.hypot(p.x - p.lookX, p.z - p.lookZ); cam.position.set(p.lookX + Math.sin(t * 0.1) * r, p.y, p.lookZ + Math.cos(t * 0.1) * r); cam.lookAt(p.lookX, 2, p.lookZ); }

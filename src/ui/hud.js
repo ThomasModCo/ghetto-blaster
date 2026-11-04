@@ -79,8 +79,8 @@ export class HUD {
     $('hud-weapon').textContent = w.def.name + (m.mode.id === 'gungame' ? ` (${p.gunGameIndex + 1}/${m.mode.gunCount})` : '');
     $('ammo-mag').textContent = w.def.mag > 1000 ? '∞' : w.mag; $('ammo-res').textContent = w.def.mag > 1000 ? '' : `/ ${w.reserve}`; $('ammo-mag').parentElement.classList.toggle('low', w.mag <= Math.max(3, w.def.mag * 0.2));
     const el = p.equip.lethal, et = p.equip.tactical;
-    $('eq-lethal').innerHTML = `<b>${el.count}</b>${el.def.name}`; $('eq-lethal').classList.toggle('empty', el.count === 0);
-    $('eq-tactical').innerHTML = `<b>${et.def.passive ? '●' : et.count}</b>${et.def.name}`; $('eq-tactical').classList.toggle('empty', et.count === 0 && !et.def.passive);
+    $('eq-lethal').innerHTML = `<b>${el.count}</b>${el.def.name}`; $('eq-lethal').classList.toggle('empty', el.count === 0); $('eq-lethal').classList.toggle('hidden', el.def.id === 'none');
+    $('eq-tactical').innerHTML = `<b>${et.def.passive ? '●' : et.count}</b>${et.def.name}`; $('eq-tactical').classList.toggle('empty', et.count === 0 && !et.def.passive); $('eq-tactical').classList.toggle('hidden', et.def.id === 'none');
     const rem = Math.max(0, m.mode.timeLimit - m.elapsed); $('hud-timer').textContent = m.state === 'pregame' ? `STARTS IN ${Math.ceil(m.pregameT)}` : fmt(rem);
     if (m.mode.teams) $('hud-score').innerHTML = `<span class="t0">${m.teamScore[0]}</span><span class="sep">${p.team === 0 ? '◀' : '▶'}</span><span class="t1">${m.teamScore[1]}</span>`;
     else { const rank = m.ranking(); const i = rank.indexOf(p); const lead = rank[0]; const score = m.mode.id === 'gungame' ? (a) => a.gunGameIndex : (a) => a.kills; $('hud-score').innerHTML = `<span class="me">#${i + 1}</span><span class="sep">YOU ${score(p)}</span><span class="sep">·</span><span>${lead === p ? (rank[1] ? rank[1].name + ' ' + score(rank[1]) : '') : lead.name + ' ' + score(lead)}</span>`; }
@@ -89,7 +89,7 @@ export class HUD {
     // killfeed
     const key = m.feed.map((f) => (f.k ? f.k.name : '') + f.v.name + f.t.toFixed(0)).join('|');
     if (key !== this.lastFeedKey) { this.lastFeedKey = key; const cls = (a) => a.isPlayer ? 'me' : m.mode.teams ? 't' + a.team : 'ffa'; $('killfeed').innerHTML = m.feed.map((f) => `<div class="kf">${f.k ? `<span class="k ${cls(f.k)}">${f.k.name}</span><span class="w">${f.head ? '☠ ' : ''}${f.w}</span>` : `<span class="w">${f.w}</span>`}<span class="v ${cls(f.v)}">${f.v.name}</span></div>`).join(''); }
-    this.renderStreaks();
+    if (m.streakState.dirty) { m.streakState.dirty = false; this.renderStreaks(true); } else this.renderStreaks();
     if (p.streakScore > 0) $('hud-name').textContent = `SCORE ${p.streakScore}`; else $('hud-name').textContent = p.killStreak > 1 ? `${p.killStreak} STREAK` : '';
   }
   drawMinimap() {

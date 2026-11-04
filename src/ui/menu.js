@@ -1,6 +1,6 @@
 // All non-HUD screens. Pure DOM; the game state machine in main.js drives these.
 import { STOCK_LOADOUTS, allLoadouts, getSave, persist, resolveLoadout } from '../game/loadouts.js';
-import { WEAPONS, PRIMARIES, SECONDARIES, weaponStats } from '../game/weapons.js';
+import { WEAPONS, PRIMARIES, SECONDARIES, weaponStats, GUN_GAME_ORDER } from '../game/weapons.js';
 import { TACTICALS, LETHALS } from '../game/equipment.js';
 import { streaksForMap } from '../game/streaks.js';
 import { MODES } from '../game/modes.js';
@@ -59,13 +59,20 @@ export function lobbySlots(mode, players, total) {
 
 // ---------------- loadout selector (pre-game) ----------------
 const TIER_COLORS = { starter: '#7cd3ff', medium: '#ffd166', powerful: '#ff7a1a' };
-export function showLoadoutSelector(mapId, current, onPick, onReady) {
+export function showLoadoutSelector(mapId, current, onPick, onReady, opts = {}) {
   show('screen-loadout');
   const list = $('loadout-list'); const detail = $('loadout-detail'); const sp = $('streak-pick');
   const streaks = streaksForMap(mapId); const save = getSave();
   const picks = current.streaks || save.lastStreaks?.[mapId] || [streaks.starter[0].id, streaks.medium[0].id, streaks.powerful[0].id];
   let sel = current.loadoutId || 'runner';
   const render = () => {
+    $('loadout-title').textContent = opts.gunGame ? 'GUN GAME' : 'SELECT LOADOUT';
+    if (opts.gunGame) {
+      // no loadouts in gun game: show the ladder everyone climbs, keep the streak picks
+      list.innerHTML = `<div class="gg-intro"><div class="gg-k">NO LOADOUTS</div><div class="gg-t">Everyone starts with the same pistol and no equipment. Every kill hands you the next gun on the ladder.</div><div class="gg-start"><img src="${wIcon(WEAPONS[GUN_GAME_ORDER[0]])}" alt=""><span>YOU START WITH</span><b>${WEAPONS[GUN_GAME_ORDER[0]].name}</b></div></div>`;
+      detail.innerHTML = `<div class="lo-head-row"><h3>THE LADDER</h3><div class="desc">${GUN_GAME_ORDER.length} guns. First kill with the last one wins.</div></div><div class="gg-ladder">${GUN_GAME_ORDER.map((id, i) => `<div class="gg-step ${i === 0 ? 'start' : ''} ${i === GUN_GAME_ORDER.length - 1 ? 'final' : ''}"><b>${i + 1}</b><img src="${wIcon(WEAPONS[id])}" alt=""><span>${WEAPONS[id].name}</span></div>`).join('')}</div>`;
+      renderStreaks(); return;
+    }
     list.innerHTML = '';
     for (const lo of allLoadouts()) {
       const d = document.createElement('div'); d.className = `lo-item ${lo.custom ? 'custom' : ''} ${lo.empty ? 'empty' : ''} ${lo.id === sel ? 'on' : ''}`;
@@ -84,6 +91,9 @@ export function showLoadoutSelector(mapId, current, onPick, onReady) {
         <div class="lo-card eq"><span class="lo-k">TACTICAL</span><img src="${eIcon(r.tactical)}" alt=""><div class="lo-card-name">${r.tactical.name}</div><div class="lo-card-type">${r.tactical.passive ? 'PASSIVE' : 'x' + r.tactical.count}</div><div class="lo-card-desc">${r.tactical.desc}</div></div>
         <div class="lo-card eq"><span class="lo-k">LETHAL</span><img src="${eIcon(r.lethal)}" alt=""><div class="lo-card-name">${r.lethal.name}</div><div class="lo-card-type">x${r.lethal.count}</div><div class="lo-card-desc">${r.lethal.desc}</div></div>
       </div>`;
+    renderStreaks();
+  };
+  const renderStreaks = () => {
     sp.innerHTML = '';
     [['STARTER', streaks.starter, 0, 'starter'], ['MEDIUM', streaks.medium, 1, 'medium'], ['POWERFUL', streaks.powerful, 2, 'powerful']].forEach(([title, arr, i, tier]) => {
       const t = document.createElement('div'); t.className = 'streak-tier'; t.innerHTML = `<h4>${title}</h4><div class="st-row"></div>`; const row = t.querySelector('.st-row');

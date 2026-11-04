@@ -33,7 +33,11 @@ export class Player extends Actor {
   setLoadout(lo) { super.setLoadout(lo); if (this.view) this.view.setWeapon(this.weapon.def); }
   setSingleWeapon(w) { super.setSingleWeapon(w); if (this.view) this.view.setWeapon(w); }
   swapWeapon() { const before = this.cur; super.swapWeapon(); if (this.cur !== before && this.view) this.view.setWeapon(this.weapon.def); }
-  onSpawn() { this.yaw = this.body.yaw; this.pitch = 0; this.recoilP = 0; this.recoilY = 0; this.adsBlend = 0; this.crouchToggle = false; this.leanDir = 0; this.snapCamera = true; this.stance = 'stand'; this.slideT = -1; this.slideBlend = 0; this.lastDuckT = -9; }
+  onSpawn() { this.yaw = this.body.yaw; this.pitch = 0; this.recoilP = 0; this.recoilY = 0; this.adsBlend = 0; this.crouchToggle = false; this.leanDir = 0; this.snapCamera = true; this.stance = 'stand'; this.slideT = -1; this.slideBlend = 0; this.lastDuckT = -9;
+    // loadout or streak changes made mid-match take effect on the next spawn (COD rules)
+    if (this.nextLoadout) { this.setLoadout(this.nextLoadout); this.nextLoadout = null; }
+    if (this.nextStreaks) { const st = this.match.streakState; this.nextStreaks.forEach((d, i) => { if (d && st.picks[i] !== d) { st.picks[i] = d; st.used[i] = false; } }); this.nextStreaks = null; st.dirty = true; }
+  }
   get sliding() { return this.slideT >= 0; }
   /** COD-style slide: duck while sprinting carries your momentum low along the ground, then settles into a crouch. */
   startSlide() {
