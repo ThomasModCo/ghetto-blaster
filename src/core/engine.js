@@ -1,6 +1,8 @@
 // Renderer, scene, lighting, and pooled visual effects.
 import * as THREE from 'three';
 import { tex, skyGradient } from './textures.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { setGunEnvironment } from '../game/character.js';
 
 export class Engine {
   constructor(canvas) {
@@ -20,6 +22,15 @@ export class Engine {
     this.vmScene.add(this.vmCamera);
     this.vmHemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0); this.vmScene.add(this.vmHemi);
     this.vmSun = new THREE.DirectionalLight(0xffffff, 1.5); this.vmScene.add(this.vmSun); this.vmScene.add(this.vmSun.target);
+    // soft fill from behind the camera so dark guns always read against dark backgrounds
+    this.vmFill = new THREE.DirectionalLight(0xffffff, 1.1); this.vmScene.add(this.vmFill); this.vmScene.add(this.vmFill.target);
+    this.lightBoost = 1.3;
+    // Studio reflection environment for weapons: metal with nothing to reflect renders black, so guns get this.
+    try {
+      const pm = new THREE.PMREMGenerator(this.renderer); this.gunEnv = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose();
+      setGunEnvironment(this.gunEnv);
+      this.vmScene.environment = this.gunEnv; this.vmScene.environmentIntensity = 0.45;
+    } catch (e) { /* no PMREM support: guns just stay darker */ }
     this.renderer.autoClear = false;
     this.clock = new THREE.Clock();
     this.quality = 'high';
@@ -54,9 +65,16 @@ export class Engine {
     for (const o of [...s.children]) if ((o.isLight || o.userData.env) && !o.userData.keep) s.remove(o);
     s.background = skyGradient(env.skyTop, env.skyHorizon, env.skyBottom);
     s.fog = new THREE.Fog(new THREE.Color(env.fogColor), env.fogNear, env.fogFar);
-    const hemi = new THREE.HemisphereLight(new THREE.Color(env.hemiSky), new THREE.Color(env.hemiGround), env.hemiIntensity ?? 0.9);
+    // Global brightness pass: stronger sky/ground fill so anything in shadow stays readable, brighter ambient,
+    // higher exposure. Maps keep their own colours and mood; only the floor of the lighting is raised.
+    const night = !!env.night;
+    this.renderer.toneMappingExposure = env.exposure ?? (night ? 1.45 : 1.3);
+    this.lightBoost = env.lightBoost ?? 1.3;
+    const hemiGround = new THREE.Color(env.hemiGround).lerp(new THREE.Color(env.hemiSky), 0.45);
+    const hemiI = Math.max(night ? 1.8 : 1.4, (env.hemiIntensity ?? 0.9) * 1.6);
+    const hemi = new THREE.HemisphereLight(new THREE.Color(env.hemiSky), hemiGround, hemiI);
     hemi.userData.env = true; s.add(hemi);
-    const sun = new THREE.DirectionalLight(new THREE.Color(env.sunColor), env.sunIntensity ?? 2.2);
+    const sun = new THREE.DirectionalLight(new THREE.Color(env.sunColor), (env.sunIntensity ?? 2.2) * 1.1);
     sun.position.set(env.sunDir[0], env.sunDir[1], env.sunDir[2]).multiplyScalar(80);
     sun.castShadow = this.quality !== 'low';
     sun.shadow.mapSize.setScalar(this.quality === 'high' ? 2048 : 1024);
@@ -65,9 +83,9 @@ export class Engine {
     sun.shadow.camera.near = 10; sun.shadow.camera.far = 300; sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.03;
     sun.userData.env = true; s.add(sun); s.add(sun.target); sun.target.userData.env = true;
     this.sun = sun; this.hemi = hemi;
-    const amb = new THREE.AmbientLight(new THREE.Color(env.ambient || '#404048'), env.ambientIntensity ?? 0.25); amb.userData.env = true; s.add(amb);
-    this.vmHemi.color.set(env.hemiSky); this.vmHemi.groundColor.set(env.hemiGround); this.vmHemi.intensity = (env.hemiIntensity ?? 0.9) * 1.1 + 0.3;
-    this.vmSun.color.set(env.sunColor); this.vmSun.intensity = Math.min(2.5, (env.sunIntensity ?? 2) * 0.8 + 0.4); this.vmSunDir = new THREE.Vector3(env.sunDir[0], env.sunDir[1], env.sunDir[2]).normalize();
+    const amb = new THREE.AmbientLight(new THREE.Color(env.ambient || '#404048').lerp(new THREE.Color('#ffffff'), 0.2), Math.min(1.1, Math.max(0.6, (env.ambientIntensity ?? 0.25) * 2.4))); amb.userData.env = true; s.add(amb);
+    this.vmHemi.color.set(env.hemiSky).lerp(new THREE.Color('#ffffff'), 0.35); this.vmHemi.groundColor.copy(hemiGround).lerp(new THREE.Color('#ffffff'), 0.25); this.vmHemi.intensity = Math.max(1.8, hemiI);
+    this.vmSun.color.set(env.sunColor); this.vmSun.intensity = Math.min(2.6, Math.max(1.6, (env.sunIntensity ?? 2) * 0.9 + 0.4)); this.vmFill.color.set(env.hemiSky).lerp(new THREE.Color('#ffffff'), 0.6); this.vmSunDir = new THREE.Vector3(env.sunDir[0], env.sunDir[1], env.sunDir[2]).normalize();
   }
   setMapLights(defs) { this.mapLightDefs = defs || []; for (const slot of this.mapPool) { slot.def = null; slot.target = 0; slot.cur = 0; slot.l.intensity = 0; slot.l.position.set(0, -200, 0); } this.mapLightT = 0; }
   updateMapLights(dt, focus) {
@@ -79,9 +97,9 @@ export class Engine {
       const ranked = defs.map((d) => ({ d, dist: Math.hypot(d.x - focus.x, d.y - focus.y, d.z - focus.z) - d.dist * 0.5 })).sort((a, b) => a.dist - b.dist).slice(0, n).map((r) => r.d);
       for (const slot of this.mapPool) if (slot.def && !ranked.includes(slot.def)) slot.target = 0; // fade out, free when dark
       for (const d of ranked) {
-        if (this.mapPool.some((sl) => sl.def === d)) { const sl = this.mapPool.find((x) => x.def === d); sl.target = d.intensity; continue; }
+        if (this.mapPool.some((sl) => sl.def === d)) { const sl = this.mapPool.find((x) => x.def === d); sl.target = d.intensity * this.lightBoost; continue; }
         const free = this.mapPool.find((sl) => !sl.def || (sl.target === 0 && sl.cur < 0.05)); if (!free) continue;
-        free.def = d; free.l.position.set(d.x, d.y, d.z); free.l.color.set(d.color); free.l.distance = d.dist; free.cur = 0; free.target = d.intensity;
+        free.def = d; free.l.position.set(d.x, d.y, d.z); free.l.color.set(d.color); free.l.distance = d.dist * 1.25; free.cur = 0; free.target = d.intensity * this.lightBoost;
       }
     }
     for (const slot of this.mapPool) { if (!slot.def) continue; slot.cur += (slot.target - slot.cur) * Math.min(1, dt * 6); slot.l.intensity = slot.cur; if (slot.target === 0 && slot.cur < 0.03) { slot.def = null; slot.cur = 0; slot.l.intensity = 0; slot.l.position.set(0, -200, 0); } }
@@ -112,6 +130,8 @@ export class Engine {
       // align the view-model camera with the world camera (world-space positions stay valid, e.g. muzzle flashes)
       this.vmCamera.position.copy(this.camera.position); this.vmCamera.quaternion.copy(this.camera.quaternion); this.vmCamera.updateMatrixWorld(true);
       if (this.vmSunDir) { this.vmSun.position.copy(this.camera.position).addScaledVector(this.vmSunDir, 10); this.vmSun.target.position.copy(this.camera.position); this.vmSun.target.updateMatrixWorld(); }
+      const fwd = this.camera.getWorldDirection(this._vmTmp || (this._vmTmp = new THREE.Vector3()));
+      this.vmFill.position.copy(this.camera.position).addScaledVector(fwd, -2).add(this.camera.up); this.vmFill.target.position.copy(this.camera.position).addScaledVector(fwd, 1); this.vmFill.target.updateMatrixWorld();
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }

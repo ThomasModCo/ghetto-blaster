@@ -75,7 +75,7 @@ const GEN = {
     grime(ctx, w, h, rng, 14 * dirty);
     return finish(c, [2, 2]);
   },
-  asphalt({ seed = 4, color = '#2d2d31' } = {}) {
+  asphalt({ seed = 4, color = '#3c3c42' } = {}) {
     const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
     ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
     noise(ctx, w, h, rng, 0.14, 9000);

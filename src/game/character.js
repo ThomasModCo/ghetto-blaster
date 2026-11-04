@@ -9,6 +9,12 @@ const bx = (w, h, d, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new
 
 export const TEAM_COLORS = ['#3b82f6', '#ef4444'];
 
+let GUN_ENV = null;
+const gunMats = new Set();
+/** Reflection map for weapon materials (set once by the engine). */
+export function setGunEnvironment(t) { GUN_ENV = t; for (const m of gunMats) { m.envMap = t; m.envMapIntensity = 0.85; m.needsUpdate = true; } }
+function gunEnv(group) { group.traverse((o) => { if (o.isMesh && o.material && !gunMats.has(o.material)) { gunMats.add(o.material); if (GUN_ENV) { o.material.envMap = GUN_ENV; o.material.envMapIntensity = 0.85; o.material.needsUpdate = true; } } }); return group; }
+
 export function buildGunMesh(w) {
   const d = w.model; const g = new THREE.Group();
   const metal = M(d.metal || '#2a2a2a', 0.5, 0.6), body = M(d.color || '#2a2a2a', 0.6, 0.4);
@@ -21,7 +27,7 @@ export function buildGunMesh(w) {
     if (d.suppressor) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 8), metal); s.rotation.x = Math.PI / 2; s.position.set(0, 0, len + 0.07); g.add(s); }
     g.userData.muzzle = new THREE.Vector3(0, 0, len + (d.suppressor ? 0.14 : 0) + (d.barrel || 0));
     g.userData.pistol = true;
-    return g;
+    return gunEnv(g);
   }
   g.add(bx(0.06, h, len, body, 0, 0, len / 2)); // receiver
   g.add(bx(0.05, h * 0.5, len * 0.55, metal, 0, h * 0.1, len * 0.5)); // upper
@@ -38,7 +44,7 @@ export function buildGunMesh(w) {
   if (d.pump) g.add(bx(0.05, 0.05, 0.14, body, 0, -h * 0.3, len + 0.1));
   if (d.bipod) for (const s of [-1, 1]) { const l = bx(0.012, 0.16, 0.012, metal, s * 0.03, -0.1, len + 0.05); l.rotation.z = s * 0.3; g.add(l); }
   g.userData.muzzle = new THREE.Vector3(0, h * 0.15, len + (d.barrel || 0) + (d.suppressor ? 0.2 : 0));
-  return g;
+  return gunEnv(g);
 }
 
 export function buildThrowableMesh(eq) {
