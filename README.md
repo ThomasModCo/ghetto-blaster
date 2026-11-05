@@ -34,6 +34,14 @@ Every menu is navigable with the D-pad or left stick. Aim assist (slowdown plus 
 Mobile: left joystick (push to the edge to sprint), drag the right side to look, big red button to fire
 (drag it to aim while firing), plus ADS / JUMP / DUCK / PEEK / SWAP / RLD / LETHAL / TAC buttons.
 
+## Asset catalog
+
+A live catalog of every character, weapon, piece of equipment, prop, structure, map, texture, VFX and icon is
+built alongside the game at `asset-catalog/` (on GitHub Pages: `/ghetto-blaster/asset-catalog/`). Each entry is
+rendered from the game's own code, with size, triangle and material counts, colour palette, per-map usage, reskin
+notes and source location. Search, filter by category, sort by name / size / triangles / usage, switch to a table,
+open any asset in a 3D viewer, and export everything as CSV or JSON.
+
 ## Headless tools
 
 ```

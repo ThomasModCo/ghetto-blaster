@@ -1,5 +1,5 @@
 /* Ghetto Blaster service worker: cache-first for the app shell, network-first for navigation. */
-const CACHE = 'ghetto-blaster-v1';
+const CACHE = 'ghetto-blaster-v2';
 const CORE = ['./', './index.html', './manifest.json', './icons/icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -21,9 +21,9 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then((res) => {
       const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put('./index.html', copy));
+      caches.open(CACHE).then((c) => c.put(req, copy));
       return res;
-    }).catch(() => caches.match('./index.html')));
+    }).catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html'))));
     return;
   }
   e.respondWith(

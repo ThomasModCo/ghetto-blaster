@@ -140,7 +140,7 @@ export class Engine {
 }
 
 // ---------------- Effects ----------------
-class FX {
+export class FX {
   constructor(scene) {
     this.scene = scene;
     this.group = new THREE.Group(); scene.add(this.group);
@@ -299,7 +299,7 @@ class FX {
 }
 
 // Muzzle flash profiles: sizes in metres, life in seconds.
-const MUZZLE_PROFILES = {
+export const MUZZLE_PROFILES = {
   pistol:     { core: 0.32, coreOffset: 0.03, tongues: 2, length: 0.28, width: 0.12, jets: 0, jetLen: 0, jetOffset: 0, jetAngle: 0, ring: 0,    smoke: 0.35, smokeAlpha: 0.175, sparks: 3,  light: 5,  lightDist: 7,  lightColor: 0xffc070, tint: 0xffe4b0, life: 0.05 },
   revolver:   { core: 0.42, coreOffset: 0.03, tongues: 3, length: 0.4,  width: 0.14, jets: 2, jetLen: 0.22, jetOffset: -0.12, jetAngle: Math.PI / 2, ring: 0.3, smoke: 0.5, smokeAlpha: 0.225, sparks: 6,  light: 9,  lightDist: 9,  lightColor: 0xffb860, tint: 0xffd9a0, life: 0.06 },
   smg:        { core: 0.3,  coreOffset: 0.03, tongues: 3, length: 0.32, width: 0.11, jets: 0, jetLen: 0, jetOffset: 0, jetAngle: 0, ring: 0,    smoke: 0.3,  smokeAlpha: 0.125, sparks: 3,  light: 5,  lightDist: 7,  lightColor: 0xffc878, tint: 0xfff0c8, life: 0.045 },
