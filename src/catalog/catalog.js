@@ -45,7 +45,7 @@ $('#app').innerHTML = `
 const toast = (t) => { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('on'), 1600); };
 
 // ---------------- derived values ----------------
-const sizeOf = (it) => (it.mapStats ? it.mapStats.size : it.stats ? Math.max(it.stats.w, it.stats.h, it.stats.d) : 0);
+const sizeOf = (it) => (it.mapStats ? it.mapStats.size : it.sizeM ?? (it.stats ? Math.max(it.stats.w, it.stats.h, it.stats.d) : 0));
 function usageOf(it) {
   if (it.usage != null) return it.usage;
   if (!it.usageKey || !state.usageReady) return null;
@@ -140,7 +140,7 @@ $('#csv').addEventListener('click', () => { const rows = exportRows(); const col
 $('#json').addEventListener('click', () => download('ghetto-blaster-assets.json', JSON.stringify(exportRows(), null, 2), 'application/json'));
 
 // ---------------- detail panel ----------------
-const view = { it: null, obj: null, orbit: null, auto: true, idleT: 0, drag: null, fx: null, liveT: 0, last: 0 };
+const view = { it: null, obj: null, orbit: null, auto: true, idleT: 0, drag: null, fx: null, liveT: 0, last: 0, play: false };
 function usageDetailText(it) { if (!it.usageKey || !state.usageReady) return it.usageLabel || ''; const u = state.usage[it.usageKey] || {}; return Object.entries(u).map(([m, n]) => `${MAP_NAME[m]} ${n}`).join('; '); }
 function usageHTML(it) {
   if (it.usageLabel && !it.usageKey) return `<div class="desc">${esc(it.usageLabel)}</div>`;
@@ -156,7 +156,7 @@ function detailBody(it) {
   const s = it.stats, ms = it.mapStats;
   const kpis = ms
     ? [['Size', `${ms.size} × ${ms.size} m`], ['Triangles', fmtN(ms.tris)], ['Draw objects', ms.meshes], ['Colliders', fmtN(ms.colliders)], ['Point lights', ms.lights], ['Spawns', ms.spawns]]
-    : s ? [['Size (W×H×D)', `${s.w} × ${s.h} × ${s.d} m`], ['Triangles', fmtN(s.tris)], ['Meshes', s.meshes], ['Materials', s.materials]] : it.size2d ? [['Resolution', it.size2d]] : [];
+    : s ? [[it.size2d ? 'Size' : 'Size (W×H×D)', it.size2d || `${s.w} × ${s.h} × ${s.d} m`], ['Triangles', fmtN(s.tris)], ['Meshes', s.meshes], ['Materials', s.materials]] : it.size2d ? [['Resolution', it.size2d]] : [];
   let mapExtra = '';
   if (ms) {
     const props = Object.entries(state.usage || {}).filter(([k]) => !k.startsWith('tex:')).map(([k, v]) => [k, v[it.mapId] || 0]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 12);
@@ -186,12 +186,13 @@ function openDetail(id) {
   const bar = $('#vbar'); bar.innerHTML = '';
   if (it.build) {
     view.obj = it.build(); if (!it.stats) it.stats = measure(view.obj);
-    view.fx = view.obj.userData.fx || null; view.liveT = 0;
+    view.fx = view.obj.userData.fx || null; view.liveT = 0; view.play = false;
     const dir = { iso: [0.7, 0.5], side: [Math.PI / 2, 0.12], front: [0.25, 0.22], top: [0.001, 1.1], low: [0.75, 0.25] }[it.view || 'iso'] || [0.7, 0.5];
-    view.orbit = { yaw: dir[0], pitch: dir[1], zoom: 1.08 }; view.auto = !it.frame || !!it.live; view.idleT = 0;
+    view.orbit = { yaw: dir[0], pitch: dir[1], zoom: 1.08 }; view.auto = !it.frame; view.idleT = 0;
     const cv = studio.renderer.domElement; viewer.prepend(cv);
-    bar.innerHTML = `<button class="btn ${view.auto ? 'on' : ''}" id="vauto">Auto-rotate</button><button class="btn" id="vreset">Reset view</button><button class="btn" id="vpng">Download PNG</button>`;
-    $('#vhint').textContent = 'Drag to orbit · scroll to zoom';
+    bar.innerHTML = `${it.live ? '<button class="btn" id="vplay">Play effect</button>' : ''}<button class="btn ${view.auto ? 'on' : ''}" id="vauto">Auto-rotate</button><button class="btn" id="vreset">Reset view</button><button class="btn" id="vpng">Download PNG</button>`;
+    if (it.live) $('#vplay').onclick = () => { view.play = !view.play; $('#vplay').classList.toggle('on', view.play); $('#vplay').textContent = view.play ? 'Playing (loop)' : 'Play effect'; if (!view.play) { closeViewerObj(); view.obj = it.build(); view.fx = view.obj.userData.fx || null; } };
+    $('#vhint').textContent = it.live ? 'Frozen at peak · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom';
     $('#vauto').onclick = () => { view.auto = !view.auto; $('#vauto').classList.toggle('on', view.auto); };
     $('#vreset').onclick = () => { view.orbit = { yaw: dir[0], pitch: dir[1], zoom: 1.08 }; };
     $('#vpng').onclick = () => { const o = it.build(); const url = studio.snapshot(o, { w: 1600, h: 1200, view: it.view, grounded: it.grounded !== false, background: it.background, exposure: it.exposure, frame: it.frame }); disposeGeometry(o); const a = document.createElement('a'); a.href = url; a.download = it.id.replace(/[:]/g, '-') + '.png'; a.click(); };
@@ -237,7 +238,7 @@ function loop(t) {
   if (view.obj && view.it) {
     const it = view.it;
     if (view.auto && !view.drag) { view.idleT += dt; if (view.idleT > 0.4) view.orbit.yaw += dt * 0.45; }
-    if (view.fx) { view.fx.update(dt, null); if (it.live) { view.liveT -= dt; if (view.liveT <= 0) { view.liveT = it.live.every; it.live.spawn(view.fx); } } }
+    if (view.fx && (view.play || !it.live)) { view.fx.update(dt, null); if (it.live && view.play) { view.liveT -= dt; if (view.liveT <= 0) { view.liveT = it.live.every; it.live.spawn(view.fx); } } }
     const r = $('#viewer').getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1);
     studio.render(view.obj, { w: Math.max(2, Math.round(r.width * dpr)), h: Math.max(2, Math.round(r.height * dpr)), orbit: view.orbit, grounded: it.grounded !== false, background: it.background, exposure: it.exposure, frame: it.frame });
   }
