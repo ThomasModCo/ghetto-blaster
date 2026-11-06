@@ -12,7 +12,17 @@ export async function loadModels(base = './') {
   const root = new URL(base, document.baseURI);
   const manifest = await (await fetch(new URL('models/manifest.json', root))).json();
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  const load = (file) => loader.loadAsync(new URL(file, root).href).then((g) => g.scene);
+  // Hosts that can't serve .glb get a single packed JSON (scripts/pack-models.mjs writes manifest.pack).
+  let packed = null;
+  if (manifest.pack) {
+    const pack = await (await fetch(new URL(manifest.pack, root))).json();
+    packed = new Map(Object.entries(pack).map(([f, b64]) => {
+      const bin = atob(b64); const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return [f, u8.buffer];
+    }));
+  }
+  const load = (file) => (packed ? loader.parseAsync(packed.get(file), '') : loader.loadAsync(new URL(file, root).href)).then((g) => g.scene);
   const jobs = [];
   for (const [key, f] of Object.entries(manifest.figures || {})) jobs.push(load(f.file).then((s) => MODELS.figures.set(key, s)));
   for (const [id, g] of Object.entries(manifest.guns || {})) jobs.push(load(g.file).then((s) => MODELS.guns.set(id, { scene: s, muzzle: g.muzzle })));

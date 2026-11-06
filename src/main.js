@@ -227,10 +227,10 @@ let toastT = null;
 function toast(text) { const t = $('pad-toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200); }
 window.addEventListener('gamepadconnected', (e) => { const ps = /054c|dualsense|dualshock|playstation|ps5|ps4/i.test(e.gamepad.id); toast(`${padLabel(ps ? 'ps' : 'xbox')} CONTROLLER CONNECTED`); });
 window.addEventListener('gamepaddisconnected', () => { toast('CONTROLLER DISCONNECTED'); if (app.state === 'match' && app.match && app.match.state === 'live') pauseMatch(); });
-updatePadPrompts();
+// the play prompt is set once the models have loaded (see the loadModels call below)
 // first touch anywhere unlocks audio
 window.addEventListener('pointerdown', () => initAudio(), { once: true });
 
 window.__gb = { app, engine, input, hud, save, padNav };
 // generated 3D models load before the first scene is built; on failure the procedural box models are used
-loadModels('./').catch((e) => console.warn('models unavailable, using procedural models', e)).finally(() => enterTitle());
+loadModels('./').catch((e) => console.warn('models unavailable, using procedural models', e)).finally(() => { enterTitle(); updatePadPrompts(); });
