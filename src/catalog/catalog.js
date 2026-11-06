@@ -3,6 +3,7 @@
 import './catalog.css';
 import { Studio, measure, disposeGeometry } from './studio.js';
 import { buildRegistry, CATEGORIES } from './registry.js';
+import { loadModels } from '../game/models.js';
 import { analyseMaps } from './maps.js';
 import { MAPS } from '../maps/index.js';
 
@@ -13,6 +14,7 @@ const cvar = (cat) => `var(--cat-${cat})`;
 const MAP_NAME = Object.fromEntries(MAPS.map((m) => [m.id, m.name]));
 
 const studio = new Studio();
+await loadModels('../').catch((e) => console.warn('models unavailable', e));
 const items = buildRegistry();
 const byId = new Map(items.map((it) => [it.id, it]));
 const state = { q: '', cat: 'All', sort: 'category', dir: 1, view: 'grid', rendered: 0, mapsDone: 0, usageReady: false };

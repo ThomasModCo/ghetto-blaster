@@ -2,6 +2,8 @@
 // Toy reskin: every figure, gun and throwable is molded in ONE solid glossy plastic colour (team, FFA slot or faction).
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { MODELS, figureKey } from './models.js';
+import { Figure } from './figure.js';
 import { clamp, damp } from '../core/rng.js';
 import { SKIN_TONES, HOODIE_COLORS } from './names.js';
 const SKIN_TONE_SLOTS = SKIN_TONES, HOODIE_SLOTS = HOODIE_COLORS; // only used to replay the legacy RNG draws
@@ -51,6 +53,11 @@ function gunEnv(group) { group.traverse((o) => { if (o.isMesh && o.material && !
 export function buildGunMesh(w, plastic = DEFAULT_GUN_PLASTIC, shade = 1) {
   const d = w.model; const g = new THREE.Group();
   const body = plasticMat(plastic, shade, 0.3), metal = plasticMat(plastic, 0.78 * shade, 0.36);
+  const gen = MODELS.guns.get(w.id);
+  if (gen) { // generated mesh, pre-oriented barrel +Z and sized to this weapon's dimensions
+    const m = gen.scene.clone(); m.traverse((o) => { if (o.isMesh) { o.material = body; o.castShadow = true; } }); g.add(m);
+    g.userData.muzzle = new THREE.Vector3(...gen.muzzle); g.userData.pistol = !!d.pistol; return g;
+  }
   const h = d.h, len = d.len;
   if (d.pistol) {
     g.add(bx(0.04, h * 0.6, len, metal, 0, 0, len / 2)); // slide
@@ -146,11 +153,17 @@ export class CharacterModel {
     this.adsBlend = 0; this.crouchBlend = 0; this.sprintBlend = 0;
     this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
     this.shadowOnly = false;
+    // generated skinned figure: the box rig stays as the (invisible) animation driver
+    const tpl = MODELS.figures.get(figureKey(faction, hat));
+    if (tpl) { const fig = new Figure(tpl, P(1), s); if (fig.ok) { this.group.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = fig; this.group.add(fig.root); } }
   }
   setGun(weapon) {
     if (this.gunMesh) { this.gunMount.remove(this.gunMesh); }
     this.gunMesh = weapon ? buildGunMesh(weapon, this.plastic) : null;
     if (this.gunMesh) { this.gunMount.add(this.gunMesh); this.gunIsPistol = !!this.gunMesh.userData.pistol; }
+    if (weapon) { const d = weapon.model, h = d.h, len = d.len; this.grips = d.pistol
+      ? { Right: new THREE.Vector3(0, -h * 0.3 - 0.06, len * 0.25), Left: new THREE.Vector3(0.035, -h * 0.3 - 0.09, len * 0.2), mag: new THREE.Vector3(0, -h * 0.3 - 0.16, len * 0.25) }
+      : { Right: new THREE.Vector3(0, -h / 2 - 0.05, len * 0.22), Left: new THREE.Vector3(0, -h * 0.35, Math.min(len * 0.42, len - 0.05)), mag: new THREE.Vector3(0, -h / 2 - 0.2, len * 0.42) }; }
   }
   muzzleWorld(out) { if (this.isDog) return out.set(0, 0.6, 0.6).applyMatrix4(this.group.matrixWorld); if (!this.gunMesh) return out.set(0, 1.4, 0).applyMatrix4(this.group.matrixWorld); return out.copy(this.gunMesh.userData.muzzle).applyMatrix4(this.gunMesh.matrixWorld); }
   /** state: { speed (m/s), moving(bool), sprint, crouch, ads, onGround, pitch, lean(-1..1), dead, reloading, firing } */
@@ -165,7 +178,7 @@ export class CharacterModel {
       this.hips.position.y = (0.95 - ease * 0.72) * s;
       this.torso.rotation.set(0, 0, 0); this.neck.rotation.set(0, 0, 0);
       this.legL.rotation.x = ease * 0.3; this.legR.rotation.x = -ease * 0.2; this.armL.rotation.x = -ease * 1.2; this.armR.rotation.x = -ease * 0.8; this.armL.rotation.z = ease * 1.2; this.armR.rotation.z = -ease * 0.6;
-      this._melt(); return;
+      this._melt(); this._applyFigure(st); return;
     }
     this.deathT = 0;
     this.adsBlend = damp(this.adsBlend, st.ads ? 1 : 0, 14, dt);
@@ -207,10 +220,18 @@ export class CharacterModel {
     this.gunMount.position.set(gx, gy, gz);
     this.gunMount.rotation.set(-this.aimPitch * 0.6 + (sprint > 0.5 && !st.ads ? 0.6 : 0) + (st.reloading ? -0.25 : 0), (sprint > 0.5 && !st.ads ? -0.5 : 0), 0);
     if (st.firing) this.gunMount.position.z -= 0.03;
+    if (this.figure) { this.gunMount.position.z -= 0.1 * s; this.gunMount.position.y += 0.04 * s; } // stock into the shoulder: the figure's arms are shorter than the box rig's
+    this._applyFigure(st);
   }
+  _applyFigure(st) {
+    if (!this.figure) return;
+    const hands = this.gunMesh && this.grips ? { obj: this.gunMesh, Right: this.grips.Right, Left: st.reloading ? this._reloadHand(st) : this.grips.Left } : null;
+    this.figure.apply(this, hands);
+  }
+  _reloadHand(st) { const v = (this._rh || (this._rh = new THREE.Vector3())).copy(this.grips.mag); v.y += Math.sin((st.reloadT || 0) * 9) * 0.06; return v; }
   makeDog() {
     while (this.group.children.length) this.group.remove(this.group.children[0]);
-    this.isDog = true; const m = plasticMat(FACTION_PLASTIC.dog, 1, 0.3), d = plasticMat(FACTION_PLASTIC.dog, 0.6, 0.35);
+    this.figure = null; this.isDog = true; const m = plasticMat(FACTION_PLASTIC.dog, 1, 0.3), d = plasticMat(FACTION_PLASTIC.dog, 0.6, 0.35);
     this.hips = new THREE.Group(); this.hips.position.y = 0.55; this.group.add(this.hips);
     this.torso = new THREE.Group(); this.hips.add(this.torso);
     this.torso.add(bx(0.32, 0.34, 0.8, m, 0, 0, 0));
@@ -222,6 +243,9 @@ export class CharacterModel {
     for (const [x, z] of [[-0.11, 0.3], [0.11, 0.3], [-0.11, -0.3], [0.11, -0.3]]) { const l = new THREE.Group(); l.position.set(x, -0.15, z); l.add(bx(0.1, 0.42, 0.12, m, 0, -0.2, 0)); this.torso.add(l); this.legs.push(l); }
     const tail = bx(0.06, 0.06, 0.3, m, 0, 0.1, -0.5); tail.rotation.x = -0.6; this.torso.add(tail);
     this.armR = new THREE.Group(); this.armL = new THREE.Group(); this.legR = new THREE.Group(); this.legL = new THREE.Group(); this.gunMount = new THREE.Group(); this.torso.add(this.gunMount); this.gunMesh = null;
+    if (MODELS.dog) { // generated dog (static mid-gallop pose): ride it on the torso so the bob and death roll still apply
+      this.torso.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = null;
+      const dg = MODELS.dog.clone(); dg.traverse((o) => { if (o.isMesh) { o.material = m; o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg); }
     this.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
   updateDog(dt, st) {

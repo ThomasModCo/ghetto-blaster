@@ -14,6 +14,7 @@ import { HUD } from './ui/hud.js';
 import * as UI from './ui/menu.js';
 import { renderCovers } from './ui/covers.js';
 import { PadNav } from './ui/padnav.js';
+import { loadModels } from './game/models.js';
 import { btn, padLabel } from './ui/padglyphs.js';
 
 const $ = (id) => document.getElementById(id);
@@ -30,7 +31,6 @@ const DEBUG_TIME = params.has('t') ? Math.max(20, +params.get('t')) : 0; // ?t=6
 const FORCE_MAP = MAPS.some((m) => m.id === params.get('map')) ? params.get('map') : null; // ?map=kowloon
 const app = { state: 'boot', mapData: null, mapId: null, match: null, cin: null, mode: null, bet: 0, pick: null, lobbyTimers: [] };
 if (input.mobile) document.body.classList.add('mobile');
-if (import.meta.env.DEV) window.__gb = { engine, app }; // dev-only hook for headless screenshot checks
 
 // ---------------- PWA ----------------
 if ('serviceWorker' in navigator && location.protocol !== 'file:') { window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {})); }
@@ -232,4 +232,5 @@ updatePadPrompts();
 window.addEventListener('pointerdown', () => initAudio(), { once: true });
 
 window.__gb = { app, engine, input, hud, save, padNav };
-enterTitle();
+// generated 3D models load before the first scene is built; on failure the procedural box models are used
+loadModels('./').catch((e) => console.warn('models unavailable, using procedural models', e)).finally(() => enterTitle());

@@ -1,0 +1,448 @@
+{
+ "version": 1,
+ "figures": {
+  "bandana": {
+   "file": "models/fig_bandana.glb"
+  },
+  "cap": {
+   "file": "models/fig_cap.glb"
+  },
+  "cop": {
+   "file": "models/fig_cop.glb"
+  },
+  "hitman": {
+   "file": "models/fig_hitman.glb"
+  },
+  "hood": {
+   "file": "models/fig_hood.glb"
+  },
+  "sicario": {
+   "file": "models/fig_sicario.glb"
+  }
+ },
+ "guns": {
+  "blicky": {
+   "file": "models/gun_blicky.glb",
+   "muzzle": [
+    0,
+    0,
+    0.21
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.024,
+     -0.255,
+     0
+    ],
+    [
+     0.024,
+     0.026,
+     0.21
+    ]
+   ]
+  },
+  "cannon": {
+   "file": "models/gun_cannon.glb",
+   "muzzle": [
+    0,
+    0.0255,
+    1.5
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.077,
+     -0.296,
+     -0.32
+    ],
+    [
+     0.077,
+     0.299,
+     1.5
+    ]
+   ]
+  },
+  "chopper": {
+   "file": "models/gun_chopper.glb",
+   "muzzle": [
+    0,
+    0.0255,
+    1.1913
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.084,
+     -0.416,
+     -0.3
+    ],
+    [
+     0.084,
+     0.164,
+     1.191
+    ]
+   ]
+  },
+  "deuce": {
+   "file": "models/gun_deuce.glb",
+   "muzzle": [
+    0,
+    0,
+    0.16
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.016,
+     -0.106,
+     0
+    ],
+    [
+     0.016,
+     0.02,
+     0.16
+    ]
+   ]
+  },
+  "drako": {
+   "file": "models/gun_drako.glb",
+   "muzzle": [
+    0,
+    0.0255,
+    0.8
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.071,
+     -0.323,
+     0
+    ],
+    [
+     0.071,
+     0.145,
+     0.8
+    ]
+   ]
+  },
+  "fifty": {
+   "file": "models/gun_fifty.glb",
+   "muzzle": [
+    0,
+    0.024,
+    1.85
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.133,
+     -0.294,
+     -0.34
+    ],
+    [
+     0.133,
+     0.334,
+     1.85
+    ]
+   ]
+  },
+  "fourfifth": {
+   "file": "models/gun_fourfifth.glb",
+   "muzzle": [
+    0,
+    0,
+    0.22
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.022,
+     -0.144,
+     0
+    ],
+    [
+     0.022,
+     0.026,
+     0.22
+    ]
+   ]
+  },
+  "gauge": {
+   "file": "models/gun_gauge.glb",
+   "muzzle": [
+    0,
+    0.021,
+    1.35
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.086,
+     -0.316,
+     -0.3
+    ],
+    [
+     0.086,
+     0.11,
+     1.35
+    ]
+   ]
+  },
+  "hammer": {
+   "file": "models/gun_hammer.glb",
+   "muzzle": [
+    0,
+    0,
+    0.3652
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.035,
+     -0.153,
+     0
+    ],
+    [
+     0.035,
+     0.036,
+     0.365
+    ]
+   ]
+  },
+  "hush": {
+   "file": "models/gun_hush.glb",
+   "muzzle": [
+    0,
+    0,
+    0.34
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.022,
+     -0.126,
+     0
+    ],
+    [
+     0.022,
+     0.03,
+     0.34
+    ]
+   ]
+  },
+  "macdaddy": {
+   "file": "models/gun_macdaddy.glb",
+   "muzzle": [
+    0,
+    0.021,
+    0.3844
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.046,
+     -0.297,
+     0
+    ],
+    [
+     0.046,
+     0.099,
+     0.384
+    ]
+   ]
+  },
+  "nine": {
+   "file": "models/gun_nine.glb",
+   "muzzle": [
+    0,
+    0,
+    0.2
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.02,
+     -0.135,
+     0
+    ],
+    [
+     0.02,
+     0.025,
+     0.2
+    ]
+   ]
+  },
+  "ratchet": {
+   "file": "models/gun_ratchet.glb",
+   "muzzle": [
+    0,
+    0.03,
+    1.4
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.146,
+     -0.326,
+     -0.3
+    ],
+    [
+     0.146,
+     0.232,
+     1.4
+    ]
+   ]
+  },
+  "snubby": {
+   "file": "models/gun_snubby.glb",
+   "muzzle": [
+    0,
+    0,
+    0.18
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.026,
+     -0.113,
+     0
+    ],
+    [
+     0.026,
+     0.028,
+     0.18
+    ]
+   ]
+  },
+  "stick": {
+   "file": "models/gun_stick.glb",
+   "muzzle": [
+    0,
+    0.027,
+    1.12
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.087,
+     -0.342,
+     -0.26
+    ],
+    [
+     0.087,
+     0.21,
+     1.12
+    ]
+   ]
+  },
+  "sweeper": {
+   "file": "models/gun_sweeper.glb",
+   "muzzle": [
+    0,
+    0.024,
+    1.0013
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.148,
+     -0.307,
+     -0.28
+    ],
+    [
+     0.148,
+     0.176,
+     1.001
+    ]
+   ]
+  },
+  "switch": {
+   "file": "models/gun_switch.glb",
+   "muzzle": [
+    0,
+    0,
+    0.21
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.033,
+     -0.137,
+     0
+    ],
+    [
+     0.033,
+     0.033,
+     0.21
+    ]
+   ]
+  },
+  "tommy": {
+   "file": "models/gun_tommy.glb",
+   "muzzle": [
+    0,
+    0.024,
+    1
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.146,
+     -0.305,
+     -0.25
+    ],
+    [
+     0.146,
+     0.154,
+     1
+    ]
+   ]
+  },
+  "trey": {
+   "file": "models/gun_trey.glb",
+   "muzzle": [
+    0,
+    0.027,
+    1.14
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.074,
+     -0.323,
+     -0.28
+    ],
+    [
+     0.074,
+     0.271,
+     1.14
+    ]
+   ]
+  },
+  "whisper": {
+   "file": "models/gun_whisper.glb",
+   "muzzle": [
+    0,
+    0.0225,
+    0.9856
+   ],
+   "flipped": true,
+   "bbox": [
+    [
+     -0.065,
+     -0.316,
+     -0.22
+    ],
+    [
+     0.065,
+     0.156,
+     0.986
+    ]
+   ]
+  }
+ },
+ "dog": {
+  "file": "models/dog.glb"
+ }
+}
