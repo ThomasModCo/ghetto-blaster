@@ -79,8 +79,9 @@ export class MapBuilder {
     if (this.def.perimeter !== false) {
       const pm = mat('concrete', { color: this.def.perimeterColor || '#7d7a72', seed: 77 }); const e = s - 0.6;
       for (const [x, z, len, rot] of [[0, -e, this.size, 0], [0, e, this.size, 0], [-e, 0, this.size, Math.PI / 2], [e, 0, this.size, Math.PI / 2]]) {
-        this.box({ x, z, w: len, h: 3.2, d: 0.5, m: pm, rot, repeat: [len / 3, 1], collide: false });
-        for (let i = -3; i <= 3; i++) { const t = i * (this.size / 7.5); const px = rot ? x : x + t, pz = rot ? z + t : z; this.graffitiDecal(px, pz, 6, 0.5, rot, this.rng.pick(['GB', 'HOOD', 'RIP', 'KING', 'OPPS', '187', 'BLAST', 'NO SNITCH']), this.rng, rot ? (x < 0 ? 0 : 2) : (z < 0 ? 0 : 2)); }
+        const diorama = this.def.diorama !== false; // toy reskin: a low kerb so the table and room beyond stay visible
+        this.box({ x, z, w: len, h: diorama ? 1.1 : 3.2, d: 0.5, m: pm, rot, repeat: [len / 3, diorama ? 0.35 : 1], collide: false });
+        if (!diorama) for (let i = -3; i <= 3; i++) { const t = i * (this.size / 7.5); const px = rot ? x : x + t, pz = rot ? z + t : z; this.graffitiDecal(px, pz, 6, 0.5, rot, this.rng.pick(['GB', 'HOOD', 'RIP', 'KING', 'OPPS', '187', 'BLAST', 'NO SNITCH']), this.rng, rot ? (x < 0 ? 0 : 2) : (z < 0 ? 0 : 2)); }
       }
     }
     return mesh;
@@ -277,6 +278,7 @@ export class MapBuilder {
   // ---------------- finish ----------------
   /** Ring of distant buildings outside the playable area so the horizon is never empty. */
   _skyline() {
+    if (this.def.diorama !== false) return this._diorama();
     if (this.def.skyline === false) return;
     const rng = new RNG((this.def.seed || 7) + 999); const s = this.size / 2; const night = this.def.env && this.def.env.sunIntensity < 1;
     const lit = night ? 0.6 : 0.15;
@@ -292,6 +294,71 @@ export class MapBuilder {
     }
     // ground slab under the skyline so it doesn't float on the fog
     const g = new THREE.Mesh(new THREE.PlaneGeometry(this.size * 3, this.size * 3), mat('asphalt', { seed: 4, color: '#26262a' })); g.rotation.x = -Math.PI / 2; g.position.y = -0.05; g.receiveShadow = false; this.group.add(g);
+  }
+  /**
+   * Toy reskin: the map is a diorama board standing on a wooden table. Beyond the board edge the player sees the
+   * cut foam edge, the table top with a few giant everyday objects (scale ~1 cm = 0.36 m) and the blurred room.
+   */
+  _diorama() {
+    const rng = new RNG((this.def.seed || 7) + 4321); const s = this.size / 2, B = s + 3, TH = 1.4, ty = -TH - 0.03;
+    const env = this.def.env || {};
+    const std = (o) => new THREE.MeshStandardMaterial(o);
+    // board: scenic border strip + cut foam sides
+    const top = mat('dirt', { seed: 3, color: '#6a6250' });
+    const side = tex('foam', { top: '#5d5a50' }).clone(); side.repeat.set((B * 2) / 10, 1); side.needsUpdate = true;
+    const sideM = std({ map: side, roughness: 0.95 }), under = std({ color: '#2a2622', roughness: 1 });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(B * 2, TH, B * 2), [sideM, sideM, top, under, sideM, sideM]);
+    board.position.y = -TH / 2 - 0.03; board.receiveShadow = true; this.group.add(board);
+    // table
+    const T = B * 3.2; const wt = tex('wood', { seed: 2 }).clone(); wt.repeat.set((T * 2) / 30, (T * 2) / 30); wt.needsUpdate = true;
+    const table = new THREE.Mesh(new THREE.BoxGeometry(T * 2, 3, T * 2), std({ map: wt, roughness: 0.45, metalness: 0 }));
+    table.position.y = ty - 1.5; table.receiveShadow = true; this.group.add(table);
+    // giant props read as roughly 2.5 cm toy scale (~1 cm = 0.8 m); every prop is a group anchored on the table top
+    const K = 2.2; const prop = (x, z) => { const g = new THREE.Group(); g.position.set(x, ty, z); g.scale.setScalar(K); this.group.add(g); return g; };
+    const add = (geo, m, x, y, z, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(0, ry, rz); o.castShadow = true; o.receiveShadow = true; this.group.add(o); return o; };
+    // spots around the board, one or two objects per side, beyond the board edge
+    const spot = (side, along, out) => { const d = B + out * K; return side === 0 ? [along, d] : side === 1 ? [along, -d] : side === 2 ? [d, along] : [-d, along]; };
+    const sides = rng.shuffle([0, 1, 2, 3]);
+    // coffee mug (8 cm across)
+    { const [x, z] = spot(sides[0], rng.float(-s * 0.5, s * 0.5), rng.float(7, 12)); const g = prop(x, z);
+      const cer = std({ color: '#f1ece2', roughness: 0.18 }); const body = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.35, 3.5, 40, 1, true), cer); body.position.y = 1.75; body.castShadow = true; g.add(body);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 0.15, 40), cer); base.position.y = 0.08; g.add(base);
+      const coffee = new THREE.Mesh(new THREE.CircleGeometry(1.4, 40), std({ color: '#2a160c', roughness: 0.1 })); coffee.rotation.x = -Math.PI / 2; coffee.position.y = 3.1; g.add(coffee);
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.24, 12, 24, Math.PI), cer); handle.rotation.z = -Math.PI / 2; handle.position.set(1.4, 1.8, 0); handle.castShadow = true; g.add(handle); g.rotation.y = rng.float(0, 6.28); }
+    // pencil (19 cm) lying on the table
+    { const [x, z] = spot(sides[1], rng.float(-s * 0.4, s * 0.4), rng.float(4, 8)); const g = prop(x, z); g.rotation.y = (sides[1] < 2 ? 0 : Math.PI / 2) + rng.float(-0.4, 0.4); const pg = new THREE.Group(); pg.position.y = 0.14; g.add(pg);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 5.6, 6), std({ color: '#e8b020', roughness: 0.5 })); shaft.rotation.z = Math.PI / 2; shaft.castShadow = true; pg.add(shaft);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.9, 6), std({ color: '#d9b48a', roughness: 0.8 })); tip.rotation.z = -Math.PI / 2; tip.position.x = 3.25; pg.add(tip);
+      const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.35, 12), std({ color: '#b8b8b0', roughness: 0.3, metalness: 0.8 })); ferrule.rotation.z = Math.PI / 2; ferrule.position.x = -2.97; pg.add(ferrule);
+      const eraser = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.4, 12), std({ color: '#e88a92', roughness: 0.9 })); eraser.rotation.z = Math.PI / 2; eraser.position.x = -3.33; pg.add(eraser); }
+    // stack of books
+    { const [x, z] = spot(sides[2], rng.float(-s * 0.5, s * 0.5), rng.float(9, 14)); const st = prop(x, z); let y = 0; const ry = rng.float(0, 6.28);
+      for (const col of rng.shuffle(['#7a2a24', '#2a4a6a', '#2f5a3a', '#3a3046'])) { const h = rng.float(0.9, 1.4); const bk = new THREE.Group(); bk.position.set(rng.float(-0.4, 0.4), y + h / 2, rng.float(-0.4, 0.4)); bk.rotation.y = ry + rng.float(-0.15, 0.15); st.add(bk);
+        const cover = new THREE.Mesh(new THREE.BoxGeometry(8.6, h, 6.1), std({ color: col, roughness: 0.7 })); cover.castShadow = true; cover.receiveShadow = true; bk.add(cover);
+        const pages = new THREE.Mesh(new THREE.BoxGeometry(8.4, h * 0.82, 5.9), std({ color: '#efe6cf', roughness: 0.9 })); pages.position.x = 0.12; bk.add(pages); y += h; } }
+    // smartphone (15 cm) with a glowing screen
+    { const [x, z] = spot(sides[3], rng.float(-s * 0.5, s * 0.5), rng.float(5, 9)); const g = prop(x, z); g.rotation.y = rng.float(0, 6.28);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.28, 5.4), std({ color: '#141518', roughness: 0.25, metalness: 0.3 })); body.position.y = 0.15; body.castShadow = true; g.add(body);
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.35, 5.1), std({ color: '#0e1220', emissive: env.night ? '#3a5aa8' : '#1c2a4a', emissiveIntensity: env.night ? 1.4 : 0.6, roughness: 0.05 })); scr.rotation.x = -Math.PI / 2; scr.position.y = 0.295; g.add(scr); }
+    // tall objects that show above the rooftops from the street: desk lamp, potted plant, drink can
+    { const [x, z] = spot(sides[1], rng.chance(0.5) ? s * 0.75 : -s * 0.75, rng.float(8, 14)); const g = prop(x, z); g.rotation.y = Math.atan2(-x, -z);
+      const blk = std({ color: '#1d1f24', roughness: 0.35, metalness: 0.4 });
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.0, 0.6, 32), blk); base.position.y = 0.3; base.castShadow = true; g.add(base);
+      const arm1 = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 11, 10), blk); arm1.position.set(0, 5.6, -1.8); arm1.rotation.x = -0.33; arm1.castShadow = true; g.add(arm1);
+      const arm2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 9, 10), blk); arm2.position.set(0, 12.2, 1.6); arm2.rotation.x = 1.05; arm2.castShadow = true; g.add(arm2);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(2.4, 3.6, 24, 1, true), std({ color: '#1d1f24', roughness: 0.35, metalness: 0.4, side: THREE.DoubleSide })); head.position.set(0, 13.2, 5.6); head.rotation.x = -0.35; head.castShadow = true; g.add(head);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 12), std({ color: '#fff4d0', emissive: '#ffd890', emissiveIntensity: env.night ? 3 : 1.2 })); bulb.position.set(0, 12.2, 5.9); g.add(bulb); }
+    { const [x, z] = spot(sides[2], rng.chance(0.5) ? s * 0.8 : -s * 0.8, rng.float(9, 15)); const g = prop(x, z);
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 2.7, 6.5, 28), std({ color: '#b5603a', roughness: 0.8 })); pot.position.y = 3.25; pot.castShadow = true; g.add(pot);
+      const soil = new THREE.Mesh(new THREE.CircleGeometry(3.4, 28), std({ color: '#2e2116', roughness: 1 })); soil.rotation.x = -Math.PI / 2; soil.position.y = 6.2; g.add(soil);
+      const leafM = std({ color: '#3f7a35', roughness: 0.55 });
+      for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2 + rng.float(-0.2, 0.2), len = rng.float(7, 11); const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), leafM); leaf.scale.set(0.9, len / 2, 0.25); leaf.position.set(Math.cos(a) * 1.6, 6.2 + len * 0.42, Math.sin(a) * 1.6); leaf.rotation.set(Math.sin(a) * 0.45, -a, -Math.cos(a) * 0.45); leaf.castShadow = true; g.add(leaf); } }
+    { const [x, z] = spot(sides[3], rng.float(-s * 0.3, s * 0.3), rng.float(6, 10)); const cg = prop(x, z); const can = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 4.4, 28), std({ color: '#b3271f', roughness: 0.3, metalness: 0.6 })); can.position.y = 2.2; can.castShadow = true; cg.add(can);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.15, 0.2, 28), std({ color: '#c8c8cc', roughness: 0.25, metalness: 0.9 })); lid.position.y = 4.5; cg.add(lid); }
+    // a model-kit sprue frame with spare parts, and a couple of spare figures lying on the table
+    { const [x, z] = spot(sides[0], rng.float(-s * 0.3, s * 0.3) + (rng.chance(0.5) ? s * 0.6 : -s * 0.6), rng.float(4, 7)); const g = prop(x, z); g.rotation.y = rng.float(0, 6.28);
+      const pm = std({ color: '#8a8f99', roughness: 0.35 }); const rod = (w, d, px, pz) => { const r = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), pm); r.position.set(px, 0.12, pz); r.castShadow = true; g.add(r); };
+      rod(7, 0.2, 0, -2.4); rod(7, 0.2, 0, 2.4); rod(0.2, 5, -3.4, 0); rod(0.2, 5, 3.4, 0); rod(6.8, 0.15, 0, 0); for (const px of [-1.7, 0, 1.7]) rod(0.15, 4.8, px, 0); }
   }
   finish() {
     this._skyline();

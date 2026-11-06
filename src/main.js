@@ -1,5 +1,6 @@
 // Ghetto Blaster — app state machine: title (cinematic) -> modes -> lobby -> match -> results.
 import * as THREE from 'three';
+import '@fontsource/anton/400.css';
 import { Engine } from './core/engine.js';
 import { Input } from './core/input.js';
 import { RNG, hashString, damp } from './core/rng.js';
@@ -29,6 +30,7 @@ const DEBUG_TIME = params.has('t') ? Math.max(20, +params.get('t')) : 0; // ?t=6
 const FORCE_MAP = MAPS.some((m) => m.id === params.get('map')) ? params.get('map') : null; // ?map=kowloon
 const app = { state: 'boot', mapData: null, mapId: null, match: null, cin: null, mode: null, bet: 0, pick: null, lobbyTimers: [] };
 if (input.mobile) document.body.classList.add('mobile');
+if (import.meta.env.DEV) window.__gb = { engine, app }; // dev-only hook for headless screenshot checks
 
 // ---------------- PWA ----------------
 if ('serviceWorker' in navigator && location.protocol !== 'file:') { window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {})); }

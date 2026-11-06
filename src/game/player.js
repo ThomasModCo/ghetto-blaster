@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { Actor } from './actor.js';
 import { clamp, damp, lerp, dampAngle } from '../core/rng.js';
 import { ViewModel } from './viewmodel.js';
-import { SKIN_TONES } from './names.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _dir = new THREE.Vector3(), _o = new THREE.Vector3(), _t = new THREE.Vector3(), _c = new THREE.Vector3();
@@ -24,7 +23,7 @@ export class Player extends Actor {
     this.leanDir = 0;
     this.aimPoint = new THREE.Vector3();
     this.sensitivity = 1;
-    this.view = new ViewModel(match.engine.vmCamera, { skin: this.rng.pick(SKIN_TONES), sleeve: this.model.accent || '#2b2b2b' });
+    this.view = new ViewModel(match.engine.vmCamera, { plastic: this.model.plastic });
     this.view.setWeapon(this.weapon.def);
     this.model.setVisible(false); // first person: own body hidden while alive
     this.lastLook = { dx: 0, dy: 0 };

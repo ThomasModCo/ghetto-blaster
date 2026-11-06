@@ -86,7 +86,7 @@ function blockWar(scene, cam, rng) {
   facade(scene, '#c0603f', 'brick', 9, 12, 16, -11, 10, 0, 0.3, 1); facade(scene, '#f0c890', 'plain', 9, 9, 14, 11, 8, 0, 0.3, 3); facade(scene, '#d8cbb4', 'plain', 18, 16, 8, 0, 34, 0, 0.35, 2);
   decal(scene, tex('graffiti', { seed: 2, text: 'BLOCK' }), 5, 2.5, -6.48, 1.8, 6, Math.PI / 2); decal(scene, tex('graffiti', { seed: 3, text: 'WAR' }), 4, 2, 6.48, 1.6, 9, -Math.PI / 2);
   car(scene, '#f2c511', 0.2, 7.5, 0.25);
-  const bc = { shirt: '#1f6fff', pants: '#1a2440', accent: '#5aa0ff' }, rc = { shirt: '#e8302a', pants: '#2a1a1a', accent: '#ff6b5a' };
+  const bc = { shirt: '#1e4fc0', pants: '#1a2440', accent: '#5aa0ff' }, rc = { shirt: '#b3271f', pants: '#2a1a1a', accent: '#ff6b5a' };
   const blue = [[-1.35, 2.2, 'aim', 'chopper', 'gang', 'cap'], [-2.1, 4.6, 'crouch', 'gauge', 'gang', 'bandana'], [-1.6, 9.2, 'aim', 'stick', 'sicario', null]];
   const red = [[1.45, 3.2, 'aim', 'drako', 'gang', 'hood'], [2.2, 6.2, 'run', 'macdaddy', 'gang', 'cap'], [1.7, 10.4, 'aim', 'tommy', 'hitman', 'glasses']];
   blue.forEach(([x, z, pose, w, f, hat], i) => bot(scene, { x, z, yaw: face([x, z], red[i]) , faction: f, ...bc, hat: hat ?? undefined, weapon: w, pose, rng }));

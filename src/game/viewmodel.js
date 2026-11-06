@@ -1,18 +1,19 @@
 // First-person view model: gun + hands parented to the camera, with sway, bob, ADS, sprint, reload and recoil.
 import * as THREE from 'three';
-import { buildGunMesh } from './character.js';
+import { buildGunMesh, plasticMat } from './character.js';
 import { damp, lerp, clamp } from '../core/rng.js';
 
 const M = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: r, metalness: 0.02 });
 
 export class ViewModel {
-  constructor(camera, { skin = '#c68642', sleeve = '#2b2b2b' } = {}) {
+  constructor(camera, { plastic = '#1e4fc0' } = {}) {
     this.camera = camera;
     this.root = new THREE.Group(); camera.add(this.root);
     this.pivot = new THREE.Group(); this.root.add(this.pivot); // recoil / reload offsets
     this.gunHolder = new THREE.Group(); this.gunHolder.rotation.y = Math.PI; this.pivot.add(this.gunHolder); // gun models point +Z; camera looks down -Z
     this.gun = null; this.weapon = null;
-    this.skinMat = M(skin, 0.7); this.sleeveMat = M(sleeve, 0.95);
+    // view-model lights are tuned for dark metal guns, so the plastic is molded a shade darker here to match the world
+    this.plastic = plastic; this.vmShade = 0.9; this.skinMat = plasticMat(plastic, this.vmShade, 0.3); this.sleeveMat = plasticMat(plastic, this.vmShade * 0.88, 0.34);
     this.hands = new THREE.Group(); this.gunHolder.add(this.hands);
     this.sway = new THREE.Vector2(); this.kick = 0; this.kickRot = 0; this.adsBlend = 0; this.sprintBlend = 0; this.reloadBlend = 0; this.swapT = 0; this.bob = new THREE.Vector2();
     this.root.renderOrder = 10;
@@ -21,7 +22,7 @@ export class ViewModel {
   setWeapon(w) {
     if (this.gun) this.gunHolder.remove(this.gun);
     while (this.hands.children.length) this.hands.remove(this.hands.children[0]);
-    this.weapon = w; this.gun = buildGunMesh(w); this.gunHolder.add(this.gun);
+    this.weapon = w; this.gun = buildGunMesh(w, this.plastic, this.vmShade); this.gunHolder.add(this.gun);
     this.gun.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
     const d = w.model, len = d.len, h = d.h;
     // right hand on the grip, left hand on the fore-end (pistols: both hands at the grip)

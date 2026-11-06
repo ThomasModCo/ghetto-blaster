@@ -1,23 +1,56 @@
 // Procedural humanoid rig + gun meshes. No external models; everything is boxes with a simple joint hierarchy.
+// Toy reskin: every figure, gun and throwable is molded in ONE solid glossy plastic colour (team, FFA slot or faction).
 import * as THREE from 'three';
-import { SKIN_TONES, HOODIE_COLORS } from './names.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { clamp, damp } from '../core/rng.js';
+import { SKIN_TONES, HOODIE_COLORS } from './names.js';
+const SKIN_TONE_SLOTS = SKIN_TONES, HOODIE_SLOTS = HOODIE_COLORS; // only used to replay the legacy RNG draws
 
 const matCache = new Map();
 const M = (c, r = 0.85, m = 0.02) => { const k = c + r + m; if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: r, metalness: m })); return matCache.get(k); };
-const bx = (w, h, d, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = false; return m; };
 
-export const TEAM_COLORS = ['#3b82f6', '#ef4444'];
+// ---- plastic ----
+export const TEAM_COLORS = ['#1e4fc0', '#b3271f']; // cobalt crew, crimson crew
+export const FFA_COLORS = ['#1040bb', '#b12522', '#c2b9b4', '#da9b03', '#eb5404', '#611b96', '#04867e', '#68c41d', '#cf1477', '#505255'];
+export const FACTION_PLASTIC = { gang: '#1e4fc0', hitman: '#2a2824', sicario: '#565a2a', cop: '#6a87a3', dog: '#3e3e42' };
+export const DEFAULT_GUN_PLASTIC = '#1e4fc0';
+const plasticMats = new Set();
+const PLASTIC_ENV = 0.3;
+let PLASTIC_LOW = false;
+/** Low quality: plain standard material instead of the clear-coated physical one (cheaper on mobile GPUs). */
+export function setPlasticQuality(q) { PLASTIC_LOW = q === 'low'; }
+const plasticCache = new Map();
+/** Glossy injection-molded plastic. shade < 1 darkens (recesses, eyes), > 1 lightens. */
+export function plasticMat(c, shade = 1, rough = 0.32) {
+  const k = c + '|' + shade + '|' + rough;
+  if (!plasticCache.has(k)) {
+    const col = new THREE.Color(c); if (shade !== 1) col.multiplyScalar(shade);
+    // saturated base under a glossy clear coat: the gloss comes from the coat, so the colour never washes out
+    const m = PLASTIC_LOW ? new THREE.MeshStandardMaterial({ color: col, roughness: rough + 0.05, metalness: 0 })
+      : new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.55 + (rough - 0.32), metalness: 0, clearcoat: 0.85, clearcoatRoughness: 0.18 });
+    if (GUN_ENV) { m.envMap = GUN_ENV; m.envMapIntensity = PLASTIC_ENV; }
+    plasticMats.add(m); plasticCache.set(k, m);
+  }
+  return plasticCache.get(k);
+}
+const rbCache = new Map();
+/** Soft-edged box so parts read as molded rather than voxel. */
+function rbGeo(w, h, d) {
+  const k = w.toFixed(3) + ',' + h.toFixed(3) + ',' + d.toFixed(3);
+  if (!rbCache.has(k)) rbCache.set(k, new RoundedBoxGeometry(w, h, d, 2, Math.min(w, h, d) * 0.22));
+  return rbCache.get(k);
+}
+const bx = (w, h, d, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(rbGeo(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = false; return m; };
 
 let GUN_ENV = null;
 const gunMats = new Set();
-/** Reflection map for weapon materials (set once by the engine). */
-export function setGunEnvironment(t) { GUN_ENV = t; for (const m of gunMats) { m.envMap = t; m.envMapIntensity = 0.85; m.needsUpdate = true; } }
-function gunEnv(group) { group.traverse((o) => { if (o.isMesh && o.material && !gunMats.has(o.material)) { gunMats.add(o.material); if (GUN_ENV) { o.material.envMap = GUN_ENV; o.material.envMapIntensity = 0.85; o.material.needsUpdate = true; } } }); return group; }
+/** Reflection map for weapon and plastic materials (set once by the engine). */
+export function setGunEnvironment(t) { GUN_ENV = t; for (const m of gunMats) { m.envMap = t; m.envMapIntensity = 0.85; m.needsUpdate = true; } for (const m of plasticMats) { m.envMap = t; m.envMapIntensity = PLASTIC_ENV; m.needsUpdate = true; } }
+function gunEnv(group) { group.traverse((o) => { if (o.isMesh && o.material && !gunMats.has(o.material) && !plasticMats.has(o.material)) { gunMats.add(o.material); if (GUN_ENV) { o.material.envMap = GUN_ENV; o.material.envMapIntensity = 0.85; o.material.needsUpdate = true; } } }); return group; }
 
-export function buildGunMesh(w) {
+export function buildGunMesh(w, plastic = DEFAULT_GUN_PLASTIC, shade = 1) {
   const d = w.model; const g = new THREE.Group();
-  const metal = M(d.metal || '#2a2a2a', 0.5, 0.6), body = M(d.color || '#2a2a2a', 0.6, 0.4);
+  const body = plasticMat(plastic, shade, 0.3), metal = plasticMat(plastic, 0.78 * shade, 0.36);
   const h = d.h, len = d.len;
   if (d.pistol) {
     g.add(bx(0.04, h * 0.6, len, metal, 0, 0, len / 2)); // slide
@@ -37,7 +70,7 @@ export function buildGunMesh(w) {
   g.add(bx(0.04, 0.12, 0.045, body, 0, -h / 2 - 0.06, len * 0.22)); // grip
   if (d.mag) { const m = bx(0.04, d.mag, 0.07, metal, 0, -h / 2 - d.mag / 2, len * 0.42); if (d.magCurve) m.rotation.x = 0.35; g.add(m); }
   if (d.drum) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.06, 12), metal); c.rotation.z = Math.PI / 2; c.position.set(0, -h / 2 - 0.06, len * 0.42); g.add(c); }
-  if (d.box) g.add(bx(0.09, 0.12, 0.14, M('#4a5a3a', 0.9), 0, -h / 2 - 0.06, len * 0.4));
+  if (d.box) g.add(bx(0.09, 0.12, 0.14, metal, 0, -h / 2 - 0.06, len * 0.4));
   if (d.scope) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, d.scope, 8), metal); s.rotation.x = Math.PI / 2; s.position.set(0, h / 2 + 0.035, len * 0.45); g.add(s); g.add(bx(0.03, 0.03, 0.03, metal, 0, h / 2 + 0.015, len * 0.45)); }
   else if (d.rail) g.add(bx(0.02, 0.03, 0.08, metal, 0, h / 2 + 0.015, len * 0.3));
   else g.add(bx(0.012, 0.03, 0.012, metal, 0, h / 2 + 0.015, len * 0.1)); // iron sight
@@ -47,28 +80,35 @@ export function buildGunMesh(w) {
   return gunEnv(g);
 }
 
-export function buildThrowableMesh(eq) {
-  const c = eq.color || '#555';
-  if (eq.shape === 'can') { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.12, 8), M(c, 0.5, 0.5)); return m; }
-  if (eq.shape === 'ball') { const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), M(c, 0.7, 0.3)); return m; }
-  if (eq.shape === 'axe') { const g = new THREE.Group(); g.add(bx(0.02, 0.02, 0.4, M('#5a3a1a'), 0, 0, 0)); g.add(bx(0.03, 0.14, 0.1, M('#aaa', 0.3, 0.8), 0, 0.06, 0.15)); return g; }
-  if (eq.shape === 'bottle') { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.2, 8), M('#5a8a3a', 0.2, 0.3))); const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshStandardMaterial({ color: '#ffb020', emissive: '#ff7000', emissiveIntensity: 2 })); f.position.y = 0.15; g.add(f); return g; }
-  return new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.16), M(c, 0.7, 0.3));
+export function buildThrowableMesh(eq, plastic = DEFAULT_GUN_PLASTIC) {
+  const pm = plasticMat(plastic, 1, 0.3), pd = plasticMat(plastic, 0.78, 0.36);
+  if (eq.shape === 'can') { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.12, 10), pm); return m; }
+  if (eq.shape === 'ball') { const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), pm); return m; }
+  if (eq.shape === 'axe') { const g = new THREE.Group(); g.add(bx(0.02, 0.02, 0.4, pd, 0, 0, 0)); g.add(bx(0.03, 0.14, 0.1, pm, 0, 0.06, 0.15)); return g; }
+  if (eq.shape === 'bottle') { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.2, 10), pm)); const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshStandardMaterial({ color: '#ffb020', emissive: '#ff7000', emissiveIntensity: 2 })); f.position.y = 0.15; g.add(f); return g; }
+  return bx(0.12, 0.08, 0.16, pm);
 }
 
 /** Humanoid rig. forward = +Z local. */
 export class CharacterModel {
-  constructor({ faction = 'gang', team = null, accent = null, rng, big = false, shirt: shirtColor = null, pants: pantsColor = null, hat: hatOverride = undefined }) {
+  constructor({ faction = 'gang', team = null, accent = null, plastic = null, rng, big = false, shirt: shirtColor = null, pants: pantsColor = null, hat: hatOverride = undefined }) {
     this.group = new THREE.Group();
     this.faction = faction;
-    const skin = M(rng ? rng.pick(SKIN_TONES) : SKIN_TONES[2], 0.7);
-    const acc = accent || (team !== null && team !== undefined ? TEAM_COLORS[team] : '#ffd166');
-    let shirt, pants, shoes, headMat, hat = null, extra = [];
-    if (faction === 'gang') { shirt = M(rng && rng.chance(0.5) ? acc : rng ? rng.pick(HOODIE_COLORS) : '#2b2b2b', 0.95); pants = M(rng && rng.chance(0.5) ? '#2a3a5a' : '#1e1e1e', 0.95); shoes = M('#eee', 0.6); headMat = skin; hat = rng && rng.chance(0.6) ? (rng.chance(0.5) ? 'hood' : 'cap') : 'bandana'; }
-    else if (faction === 'hitman') { shirt = M('#111', 0.7); pants = M('#111', 0.7); shoes = M('#111', 0.3, 0.3); headMat = skin; hat = 'glasses'; extra.push(['tie', M('#fff', 0.8)]); }
-    else if (faction === 'sicario') { shirt = M('#1a1a1a', 0.95); pants = M('#5a5a3a', 0.95); shoes = M('#222', 0.8); headMat = M('#111', 0.95); extra.push(['vest', M('#4a5a3a', 0.95)]); }
-    else { shirt = M('#4f7fbf', 0.9); pants = M('#1a2340', 0.9); shoes = M('#111', 0.5); headMat = skin; hat = 'cap'; extra.push(['badge', M('#ffd166', 0.3, 0.8)], ['belt', M('#111', 0.5)]); }
-    if (shirtColor) shirt = M(shirtColor, 0.9); if (pantsColor) pants = M(pantsColor, 0.9); if (hatOverride !== undefined) hat = hatOverride;
+    // one plastic colour for the whole figure: explicit > team > faction
+    const base = plastic || shirtColor || (team !== null && team !== undefined ? TEAM_COLORS[team] : (FACTION_PLASTIC[faction] || FACTION_PLASTIC.gang));
+    const P = (shade = 1, r = 0.32) => plasticMat(base, shade, r);
+    const acc = accent || base;
+    const skin = P(1);
+    let shirt = P(1), pants = P(0.9), shoes = P(0.82), headMat = P(1), hat = null; const extra = [];
+    // Keep the exact random draws the old skin/clothing code made: the same RNG drives the bot's AI afterwards,
+    // so changing how many numbers are consumed here would change every pre-planned match outcome.
+    if (rng) { rng.pick(SKIN_TONE_SLOTS); if (faction === 'gang') { if (!rng.chance(0.5)) rng.pick(HOODIE_SLOTS); rng.chance(0.5); } }
+    if (faction === 'gang') { hat = rng && rng.chance(0.6) ? (rng.chance(0.5) ? 'hood' : 'cap') : 'bandana'; }
+    else if (faction === 'hitman') { hat = 'glasses'; extra.push(['tie', P(1.25)]); }
+    else if (faction === 'sicario') { headMat = P(0.95); extra.push(['vest', P(0.86)]); }
+    else { hat = 'cap'; extra.push(['badge', P(1.35)], ['belt', P(0.72)]); }
+    if (hatOverride !== undefined) hat = hatOverride;
+    this.plastic = base;
     this.accent = acc;
     const s = big ? 1.15 : 1;
     // hierarchy
@@ -78,16 +118,16 @@ export class CharacterModel {
     // arms (shoulder pivots)
     this.armR = new THREE.Group(); this.armR.position.set(-0.3 * s, 0.56 * s, 0); this.torso.add(this.armR);
     this.armL = new THREE.Group(); this.armL.position.set(0.3 * s, 0.56 * s, 0); this.torso.add(this.armL);
-    for (const [arm, side] of [[this.armR, -1], [this.armL, 1]]) { arm.add(bx(0.13 * s, 0.3 * s, 0.13 * s, shirt, 0, -0.15 * s, 0)); const fore = bx(0.11 * s, 0.3 * s, 0.11 * s, faction === 'sicario' ? shirt : skin, 0, -0.44 * s, 0); arm.add(fore); const hand = bx(0.1 * s, 0.1 * s, 0.1 * s, faction === 'sicario' ? M('#111') : skin, 0, -0.62 * s, 0); arm.add(hand); }
+    for (const [arm, side] of [[this.armR, -1], [this.armL, 1]]) { arm.add(bx(0.13 * s, 0.3 * s, 0.13 * s, shirt, 0, -0.15 * s, 0)); const fore = bx(0.11 * s, 0.3 * s, 0.11 * s, skin, 0, -0.44 * s, 0); arm.add(fore); const hand = bx(0.1 * s, 0.1 * s, 0.1 * s, P(0.95), 0, -0.62 * s, 0); arm.add(hand); }
     // head
     this.neck = new THREE.Group(); this.neck.position.y = 0.64 * s; this.torso.add(this.neck);
     const head = bx(0.26 * s, 0.28 * s, 0.26 * s, headMat, 0, 0.16 * s, 0); this.neck.add(head); this.headMesh = head;
-    if (hat === 'hood') { const h = bx(0.3 * s, 0.32 * s, 0.3 * s, shirt, 0, 0.17 * s, -0.03 * s); this.neck.add(h); const face = bx(0.2 * s, 0.2 * s, 0.03 * s, skin, 0, 0.14 * s, 0.14 * s); this.neck.add(face); }
-    else if (hat === 'cap') { this.neck.add(bx(0.28 * s, 0.1 * s, 0.28 * s, faction === 'cop' ? M('#1a2340') : M(acc, 0.9), 0, 0.28 * s, 0)); this.neck.add(bx(0.26 * s, 0.03 * s, 0.14 * s, faction === 'cop' ? M('#111') : M(acc, 0.9), 0, 0.25 * s, 0.18 * s)); }
-    else if (hat === 'bandana') { this.neck.add(bx(0.27 * s, 0.07 * s, 0.27 * s, M(acc, 0.9), 0, 0.26 * s, 0)); }
-    else if (hat === 'glasses') { this.neck.add(bx(0.24 * s, 0.05 * s, 0.03 * s, M('#111', 0.2, 0.5), 0, 0.19 * s, 0.14 * s)); }
+    if (hat === 'hood') { const h = bx(0.3 * s, 0.32 * s, 0.3 * s, shirt, 0, 0.17 * s, -0.03 * s); this.neck.add(h); const face = bx(0.2 * s, 0.2 * s, 0.03 * s, P(0.8), 0, 0.14 * s, 0.14 * s); this.neck.add(face); }
+    else if (hat === 'cap') { this.neck.add(bx(0.28 * s, 0.1 * s, 0.28 * s, P(0.92), 0, 0.28 * s, 0)); this.neck.add(bx(0.26 * s, 0.03 * s, 0.14 * s, P(0.85), 0, 0.25 * s, 0.18 * s)); }
+    else if (hat === 'bandana') { this.neck.add(bx(0.27 * s, 0.07 * s, 0.27 * s, P(0.88), 0, 0.26 * s, 0)); this.neck.add(bx(0.24 * s, 0.1 * s, 0.05 * s, P(0.88), 0, 0.08 * s, 0.13 * s)); }
+    else if (hat === 'glasses') { this.neck.add(bx(0.24 * s, 0.05 * s, 0.03 * s, P(0.35, 0.12), 0, 0.19 * s, 0.14 * s)); }
     // eyes
-    for (const e of [-0.06, 0.06]) if (faction !== 'sicario' && hat !== 'glasses') { const eye = bx(0.03 * s, 0.03 * s, 0.01, M('#111'), e * s, 0.19 * s, 0.135 * s); this.neck.add(eye); }
+    for (const e of [-0.06, 0.06]) if (faction !== 'sicario' && hat !== 'glasses') { const eye = bx(0.03 * s, 0.03 * s, 0.012, P(0.4), e * s, 0.19 * s, 0.135 * s); this.neck.add(eye); }
     for (const [kind, m] of extra) {
       if (kind === 'tie') this.torso.add(bx(0.06 * s, 0.4 * s, 0.01, m, 0, 0.36 * s, 0.135 * s));
       if (kind === 'vest') this.torso.add(bx(0.5 * s, 0.46 * s, 0.32 * s, m, 0, 0.34 * s, 0));
@@ -109,7 +149,7 @@ export class CharacterModel {
   }
   setGun(weapon) {
     if (this.gunMesh) { this.gunMount.remove(this.gunMesh); }
-    this.gunMesh = weapon ? buildGunMesh(weapon) : null;
+    this.gunMesh = weapon ? buildGunMesh(weapon, this.plastic) : null;
     if (this.gunMesh) { this.gunMount.add(this.gunMesh); this.gunIsPistol = !!this.gunMesh.userData.pistol; }
   }
   muzzleWorld(out) { if (this.isDog) return out.set(0, 0.6, 0.6).applyMatrix4(this.group.matrixWorld); if (!this.gunMesh) return out.set(0, 1.4, 0).applyMatrix4(this.group.matrixWorld); return out.copy(this.gunMesh.userData.muzzle).applyMatrix4(this.gunMesh.matrixWorld); }
@@ -125,7 +165,7 @@ export class CharacterModel {
       this.hips.position.y = (0.95 - ease * 0.72) * s;
       this.torso.rotation.set(0, 0, 0); this.neck.rotation.set(0, 0, 0);
       this.legL.rotation.x = ease * 0.3; this.legR.rotation.x = -ease * 0.2; this.armL.rotation.x = -ease * 1.2; this.armR.rotation.x = -ease * 0.8; this.armL.rotation.z = ease * 1.2; this.armR.rotation.z = -ease * 0.6;
-      return;
+      this._melt(); return;
     }
     this.deathT = 0;
     this.adsBlend = damp(this.adsBlend, st.ads ? 1 : 0, 14, dt);
@@ -170,13 +210,14 @@ export class CharacterModel {
   }
   makeDog() {
     while (this.group.children.length) this.group.remove(this.group.children[0]);
-    this.isDog = true; const m = M('#4a3a30', 0.95), d = M('#2a2420', 0.95);
+    this.isDog = true; const m = plasticMat(FACTION_PLASTIC.dog, 1, 0.3), d = plasticMat(FACTION_PLASTIC.dog, 0.6, 0.35);
     this.hips = new THREE.Group(); this.hips.position.y = 0.55; this.group.add(this.hips);
     this.torso = new THREE.Group(); this.hips.add(this.torso);
     this.torso.add(bx(0.32, 0.34, 0.8, m, 0, 0, 0));
     this.neck = new THREE.Group(); this.neck.position.set(0, 0.12, 0.45); this.torso.add(this.neck);
     this.neck.add(bx(0.24, 0.22, 0.3, m, 0, 0.05, 0.12)); this.neck.add(bx(0.14, 0.1, 0.16, d, 0, -0.02, 0.32));
     for (const e of [-0.09, 0.09]) this.neck.add(bx(0.06, 0.08, 0.04, d, e, 0.17, 0.08));
+    this.neck.add(bx(0.27, 0.06, 0.2, plasticMat(this.plastic || FACTION_PLASTIC.gang, 1, 0.3), 0, -0.05, -0.02)); // collar in owner's colour
     this.legs = [];
     for (const [x, z] of [[-0.11, 0.3], [0.11, 0.3], [-0.11, -0.3], [0.11, -0.3]]) { const l = new THREE.Group(); l.position.set(x, -0.15, z); l.add(bx(0.1, 0.42, 0.12, m, 0, -0.2, 0)); this.torso.add(l); this.legs.push(l); }
     const tail = bx(0.06, 0.06, 0.3, m, 0, 0.1, -0.5); tail.rotation.x = -0.6; this.torso.add(tail);
@@ -184,16 +225,18 @@ export class CharacterModel {
     this.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
   updateDog(dt, st) {
-    if (st.dead) { this.deathT += dt; const t = Math.min(1, this.deathT * 2.5); this.hips.rotation.z = t * Math.PI / 2; this.hips.position.y = 0.55 - t * 0.35; return; }
-    this.deathT = 0; this.hips.rotation.z = 0; this.hips.position.y = 0.55;
+    if (st.dead) { this.deathT += dt; const t = Math.min(1, this.deathT * 2.5); this.hips.rotation.z = t * Math.PI / 2; this.hips.position.y = 0.55 - t * 0.35; this._melt(); return; }
+    this.deathT = 0; this.hips.rotation.z = 0; this.hips.position.y = 0.55; this.group.scale.set(1, 1, 1);
     if (st.moving && st.onGround) this.phase += dt * st.speed * 2.2;
     const amp = Math.min(1, st.speed / 8) * 0.8;
     this.legs.forEach((l, i) => { l.rotation.x = Math.sin(this.phase + (i % 3 === 0 ? 0 : Math.PI)) * amp; });
     this.hips.position.y = 0.55 + Math.abs(Math.sin(this.phase)) * 0.06 * amp;
     this.neck.rotation.x = -(st.pitch || 0) * 0.5;
   }
+  /** Toy death: after the fall the plastic slumps and spreads a little. */
+  _melt() { const k = clamp((this.deathT - 0.55) / 1.4, 0, 1), e = k * (2 - k); this.group.scale.set(1 + e * 0.14, 1 - e * 0.32, 1 + e * 0.14); }
   die(dir = 1) { this.dead = true; this.deathDir = dir; this.deathT = 0; }
-  revive() { this.dead = false; this.deathT = 0; this.hips.rotation.set(0, 0, 0); this.hips.position.set(0, 0.95 * this.scale, 0); }
+  revive() { this.dead = false; this.deathT = 0; this.group.scale.set(1, 1, 1); this.hips.rotation.set(0, 0, 0); this.hips.position.set(0, 0.95 * this.scale, 0); }
   hit() { this.flinch = 1; }
   setVisible(v) { this.group.visible = v; }
   dispose() { this.group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }

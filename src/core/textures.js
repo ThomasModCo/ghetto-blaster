@@ -281,6 +281,31 @@ const GEN = {
     ctx.fillStyle = g; ctx.fillRect(-32, -32, 64, 64);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   },
+  // ---- toy reskin: diorama table ----
+  wood({ color = '#7a4f2e', seed = 1 } = {}) {
+    const w = 512, h = 512, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
+    const plank = 128;
+    for (let x = 0; x < w; x += plank) {
+      const col = new THREE.Color(color); col.offsetHSL(rng.float(-0.01, 0.01), rng.float(-0.04, 0.04), rng.float(-0.05, 0.05));
+      ctx.fillStyle = col.getStyle(); ctx.fillRect(x, 0, plank, h);
+      for (let i = 0; i < 46; i++) { // grain lines
+        const gx = x + rng.float(2, plank - 2); ctx.strokeStyle = `rgba(40,20,8,${rng.float(0.05, 0.22)})`; ctx.lineWidth = rng.float(0.5, 2);
+        ctx.beginPath(); ctx.moveTo(gx, 0); for (let y = 0; y <= h; y += 32) ctx.lineTo(gx + Math.sin(y * 0.02 + i) * rng.float(1, 4), y); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(20,10,4,0.55)'; ctx.fillRect(x, 0, 2, h); // plank seam
+    }
+    noise(ctx, w, h, rng, 0.05, 2500);
+    const t = finish(c, [1, 1]); t.anisotropy = 8; return t;
+  },
+  foam({ top = '#5d5a50', seed = 1 } = {}) { // cut edge of a diorama board: scenic top, plaster, layered pink foam
+    const w = 256, h = 128, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
+    ctx.fillStyle = top; ctx.fillRect(0, 0, w, 10);
+    ctx.fillStyle = '#e9e3d6'; ctx.fillRect(0, 10, w, 16);
+    const layers = ['#e8a8b4', '#e3a0ad', '#eab0bb', '#dc98a6'];
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = layers[i]; ctx.fillRect(0, 26 + i * 25, w, 25); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, 26 + i * 25, w, 1); }
+    noise(ctx, w, h, rng, 0.06, 1800);
+    return finish(c, [1, 1]);
+  },
 };
 
 export function skyGradient(top = '#2b3a5c', horizon = '#d99a62', bottom = '#1a1a1f') {
@@ -289,4 +314,59 @@ export function skyGradient(top = '#2b3a5c', horizon = '#d99a62', bottom = '#1a1
   g.addColorStop(0, top); g.addColorStop(0.55, horizon); g.addColorStop(1, bottom);
   ctx.fillStyle = g; ctx.fillRect(0, 0, 4, 256);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping; return t;
+}
+
+/**
+ * Toy reskin: the "sky" is the real room the diorama table stands in, painted and heavily blurred into an
+ * equirectangular panorama. Wall colour follows the map's fog colour so distant fog blends into the walls;
+ * windows show the map's sky colour by day and city lights at night.
+ */
+const roomCache = new Map();
+export function roomPanorama(env = {}) {
+  const night = !!env.night, key = JSON.stringify([env.fogColor, env.skyHorizon, env.skyTop, night]);
+  if (roomCache.has(key)) return roomCache.get(key);
+  const W = 2048, H = 1024, c = canvas(W, H), ctx = c.getContext('2d'), rng = new RNG(4242);
+  const fog = new THREE.Color(env.fogColor || '#b9bcc2');
+  const wall = fog.clone().lerp(new THREE.Color(night ? '#2a2630' : '#d8c8b0'), 0.35);
+  const ceil = wall.clone().multiplyScalar(night ? 0.55 : 0.85), floor = new THREE.Color(night ? '#1c1612' : '#4a3424');
+  const horizonV = 0.5; // eye level ~ table top
+  // ceiling -> wall -> floor
+  let g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, ceil.getStyle()); g.addColorStop(0.2, ceil.clone().lerp(wall, 0.6).getStyle()); g.addColorStop(0.24, wall.getStyle());
+  g.addColorStop(horizonV + 0.08, wall.clone().multiplyScalar(0.9).getStyle()); g.addColorStop(horizonV + 0.12, floor.getStyle()); g.addColorStop(1, floor.clone().multiplyScalar(0.6).getStyle());
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const rect = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x * W, y * H, w * W, h * H); };
+  const glow = (x, y, r, col, a) => { const gg = ctx.createRadialGradient(x * W, y * H, 0, x * W, y * H, r * W); gg.addColorStop(0, col.replace('A', a)); gg.addColorStop(1, col.replace('A', 0)); ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H); };
+  // windows (two, on opposite walls) with curtains
+  const sky = new THREE.Color(env.skyHorizon || '#cfd7de'), skyTop = new THREE.Color(env.skyTop || '#6c86a4');
+  for (const wx of [0.12, 0.62]) {
+    const wg = ctx.createLinearGradient(0, 0.26 * H, 0, 0.5 * H);
+    if (night) { wg.addColorStop(0, '#0b1024'); wg.addColorStop(1, '#1d1838'); } else { wg.addColorStop(0, skyTop.getStyle()); wg.addColorStop(1, sky.clone().lerp(new THREE.Color('#ffffff'), 0.35).getStyle()); }
+    ctx.fillStyle = wg; ctx.fillRect(wx * W, 0.26 * H, 0.13 * W, 0.24 * H);
+    if (night) for (let i = 0; i < 70; i++) rect(wx + rng.float(0, 0.13), rng.float(0.38, 0.5), 0.0015, 0.004, `rgba(255,${rng.int(170, 230)},120,0.9)`);
+    else glow(wx + 0.065, 0.38, 0.12, 'rgba(255,250,235,A)', 0.55);
+    rect(wx + 0.063, 0.26, 0.004, 0.24, 'rgba(40,36,32,0.8)'); rect(wx, 0.375, 0.13, 0.005, 'rgba(40,36,32,0.8)');
+    rect(wx - 0.025, 0.24, 0.028, 0.3, wall.clone().lerp(new THREE.Color('#7a3a2a'), 0.55).getStyle()); rect(wx + 0.127, 0.24, 0.028, 0.3, wall.clone().lerp(new THREE.Color('#7a3a2a'), 0.55).getStyle());
+  }
+  // bookshelf
+  rect(0.33, 0.22, 0.09, 0.34, '#3a2a1e');
+  for (let r = 0; r < 5; r++) for (let b = 0; b < 12; b++) rect(0.335 + b * 0.0068, 0.235 + r * 0.066, 0.006, rng.float(0.035, 0.055), ['#7a2a24', '#2a4a6a', '#c9b48a', '#2f5a3a', '#6a5a8a', '#b86a2a'][rng.int(0, 5)]);
+  // door
+  rect(0.86, 0.25, 0.06, 0.33, wall.clone().multiplyScalar(0.7).getStyle());
+  // framed pictures
+  rect(0.47, 0.3, 0.05, 0.07, '#2a2622'); rect(0.475, 0.307, 0.04, 0.056, sky.clone().lerp(new THREE.Color('#887766'), 0.5).getStyle());
+  rect(0.79, 0.31, 0.04, 0.05, '#2a2622');
+  // sofa / armchair silhouettes and a rug
+  rect(0.44, 0.5, 0.16, 0.08, '#5a3a32'); rect(0.44, 0.47, 0.16, 0.04, '#6a463c');
+  rect(0.02, 0.5, 0.07, 0.09, '#3e4a52');
+  ctx.fillStyle = 'rgba(120,40,30,0.35)'; ctx.beginPath(); ctx.ellipse(0.55 * W, 0.8 * H, 0.25 * W, 0.08 * H, 0, 0, Math.PI * 2); ctx.fill();
+  // floor lamp + ceiling light
+  rect(0.3, 0.3, 0.003, 0.28, '#222'); glow(0.3015, 0.29, night ? 0.09 : 0.05, 'rgba(255,200,130,A)', night ? 0.9 : 0.45);
+  if (night) glow(0.55, 0.05, 0.2, 'rgba(255,215,160,A)', 0.35);
+  noise(ctx, W, H, rng, 0.03, 6000);
+  // heavy blur: the room is far out of focus
+  const out = canvas(W, H), o = out.getContext('2d'); o.filter = 'blur(22px)'; o.drawImage(c, 0, 0); o.filter = 'none';
+  const t = new THREE.CanvasTexture(out); t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping;
+  t.userData.wall = wall.clone().multiplyScalar(0.95); // fog blends into this
+  roomCache.set(key, t); return t;
 }

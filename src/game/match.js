@@ -9,7 +9,7 @@ import { WEAPONS, GUN_GAME_ORDER } from './weapons.js';
 import { resolveLoadout, randomLoadout } from './loadouts.js';
 import { pickNames, FACTIONS } from './names.js';
 import { sfx } from '../audio/sfx.js';
-import { buildGunMesh } from './character.js';
+import { buildGunMesh, FFA_COLORS } from './character.js';
 
 const _v = new THREE.Vector3(), _r = new THREE.Vector3();
 const BITE = { id: 'bite', name: 'BITE', type: 'melee', slot: 'primary', damage: 55, rpm: 110, mag: 9999, reserve: 0, reload: 1, rangeFull: 2.2, rangeMin: 2.6, minDamage: 0, auto: true, pellets: 1, headshot: 1, adsTime: 0.1, adsFov: 70, speedMult: 1.5, adsSpeedMult: 1, spreadHip: 4, spreadAds: 4, spreadMove: 0, recoilV: 0, recoilH: 0, recoilRecover: 10, sound: 'none', suppressed: true, swapTime: 0.1, tracer: false, model: { len: 0.01, h: 0.01, barrel: 0, mag: 0, stock: 0, pistol: true, color: '#000' } };
@@ -44,14 +44,14 @@ export class Match {
     const names = pickNames(rng, n);
     if (!this.cinematic) {
       const pTeam = mode.teams ? rng.int(0, 1) : null;
-      this.player = new Player(this, { name: this.playerName, team: pTeam, faction: 'gang', loadout: resolveLoadout(loadout), rng: new RNG(this.seed + 1), accent: null });
+      this.player = new Player(this, { name: this.playerName, team: pTeam, faction: 'gang', loadout: resolveLoadout(loadout), rng: new RNG(this.seed + 1), accent: null, plastic: FFA_COLORS[0] });
       this.actors.push(this.player);
     }
     const botCount = this.cinematic ? n : n - 1;
     for (let i = 0; i < botCount; i++) {
       let team = null;
       if (mode.teams) { const counts = [0, 0]; for (const a of this.actors) if (a.team !== null) counts[a.team]++; team = counts[0] <= counts[1] ? 0 : 1; if (counts[0] >= teamSize) team = 1; if (counts[1] >= teamSize) team = 0; }
-      const b = new Bot(this, { name: names[i], team, faction: rng.pick(FACTIONS), loadout: resolveLoadout(randomLoadout(rng)), rng: new RNG(this.seed + 100 + i), skill: rng.float(0.3, 0.95) });
+      const b = new Bot(this, { name: names[i], team, faction: rng.pick(FACTIONS), loadout: resolveLoadout(randomLoadout(rng)), rng: new RNG(this.seed + 100 + i), skill: rng.float(0.3, 0.95), plastic: FFA_COLORS[(i + (this.cinematic ? 0 : 1)) % FFA_COLORS.length] });
       b.level = rng.int(3, 120); b.ping = rng.int(18, 95);
       this.actors.push(b); this.bots.push(b);
     }
@@ -169,7 +169,7 @@ export class Match {
   }
   spawnCrew(owner, skin, duration, isDog) {
     const lo = isDog ? { primary: BITE, secondary: BITE, tactical: { id: 'none', name: '', count: 0, passive: true }, lethal: { id: 'none', name: '', count: 0, passive: true } } : resolveLoadout(randomLoadout(this.rng));
-    const b = new Bot(this, { name: isDog ? 'PITBULL' : (skin === 'cop' ? 'OFFICER' : skin === 'sicario' ? 'COLECTIVO' : 'HOMIE'), team: owner.team, faction: isDog ? 'dog' : skin, loadout: lo, rng: new RNG(this.rng.int(1, 1e9)), skill: isDog ? 0.9 : 0.75, persona: 'rusher', accent: owner.model.accent });
+    const b = new Bot(this, { name: isDog ? 'PITBULL' : (skin === 'cop' ? 'OFFICER' : skin === 'sicario' ? 'COLECTIVO' : 'HOMIE'), team: owner.team, faction: isDog ? 'dog' : skin, loadout: lo, rng: new RNG(this.rng.int(1, 1e9)), skill: isDog ? 0.9 : 0.75, persona: 'rusher', accent: owner.model.accent, plastic: owner.model.plastic });
     b.owner = owner; b.isCrew = true; b.isDog = isDog; b.ally = this.mode.teams ? null : owner; b.despawnT = duration; b.aggro = 1; b.level = 0; b.ping = 0;
     if (isDog) b.model.makeDog();
     this.actors.push(b); this.bots.push(b); this.crew.push(b);
@@ -241,12 +241,12 @@ export class Match {
     const p = this.player;
     for (let i = this.mortars.length - 1; i >= 0; i--) { const m = this.mortars[i]; m.t -= dt; m.next -= dt; if (m.next <= 0) { m.next = m.interval; const es = this.enemiesOf(m.owner).filter((e) => e.alive); if (es.length) { const e = this.rng.pick(es); const at = e.pos.clone().add(new THREE.Vector3(this.rng.float(-1.5, 1.5), 0.2, this.rng.float(-1.5, 1.5))); if (m.fire) { this.projectiles.fires.push({ pos: at, r: 3.5, t: 4, owner: m.owner, sparkT: 0, light: this.fx.light(at.clone().add(new THREE.Vector3(0, 0.6, 0)), 0xff7020, 8, 8, 4, false) }); this.fx.explosion(at, 2); sfx('explosion', { vol: 0.5 }); } else this.projectiles.explode(at, 5, 120, m.owner, {}); } } if (m.t <= 0) this.mortars.splice(i, 1); }
     for (let i = this.timed.length - 1; i >= 0; i--) { const t = this.timed[i]; t.t -= dt; if (t.kind === 'wipe') { if (t.t <= 0) { for (const e of this.enemiesOf(t.owner)) if (e.alive) { const c = e.chest(new THREE.Vector3()); this.fx.explosion(c, 2); e.takeDamage(1000, t.owner, 'body', c); } sfx('explosion'); this.timed.splice(i, 1); } continue; }
-      t.next -= dt; if (t.next <= 0) { t.next = t.interval; const es = this.enemiesOf(t.owner).filter((e) => e.alive); if (es.length) { const e = this.rng.pick(es); const c = e.chest(new THREE.Vector3()); const from = c.clone().add(new THREE.Vector3(this.rng.float(-30, 30), 25, this.rng.float(-30, 30))); this.fx.tracer(from, c); sfx('shot', { kind: 'sniper', vol: 0.6 }); e.takeDamage(1000, t.owner, 'head', c); this.fx.blood(c); } } if (t.t <= 0) this.timed.splice(i, 1); }
+      t.next -= dt; if (t.next <= 0) { t.next = t.interval; const es = this.enemiesOf(t.owner).filter((e) => e.alive); if (es.length) { const e = this.rng.pick(es); const c = e.chest(new THREE.Vector3()); const from = c.clone().add(new THREE.Vector3(this.rng.float(-30, 30), 25, this.rng.float(-30, 30))); this.fx.tracer(from, c); sfx('shot', { kind: 'sniper', vol: 0.6 }); e.takeDamage(1000, t.owner, 'head', c); this.fx.blood(c, e.model.plastic); } } if (t.t <= 0) this.timed.splice(i, 1); }
     for (let i = this.cars.length - 1; i >= 0; i--) { const c = this.cars[i]; c.t += dt; const k = c.t / c.dur; c.pos.lerpVectors(c.pos, c.end, Math.min(1, dt * 1.2)); c.pos.addScaledVector(c.dir, dt * 16); c.mesh.position.copy(c.pos).setY(0); c.mesh.rotation.y = Math.atan2(c.dir.x, c.dir.z); c.shotT -= dt;
-      for (const e of this.enemiesOf(c.owner)) { if (!e.alive) continue; const d = e.pos.distanceTo(c.pos); if (d < 2.2) { e.takeDamage(1000, c.owner, 'body', e.chest(new THREE.Vector3())); this.fx.blood(e.chest(new THREE.Vector3())); } else if (d < 16 && c.shotT <= 0 && this.map.world.los(c.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), e.chest(new THREE.Vector3()))) { c.shotT = 0.12; const from = c.pos.clone().add(new THREE.Vector3(0, 1.2, 0)); this.fx.tracer(from, e.chest(new THREE.Vector3())); this.fx.muzzle(from, c.dir, 'smg'); sfx('shot', { kind: 'smg', vol: 0.7 }); e.takeDamage(c.heavy ? 40 : 26, c.owner, 'body'); } }
+      for (const e of this.enemiesOf(c.owner)) { if (!e.alive) continue; const d = e.pos.distanceTo(c.pos); if (d < 2.2) { e.takeDamage(1000, c.owner, 'body', e.chest(new THREE.Vector3())); this.fx.blood(e.chest(new THREE.Vector3()), e.model.plastic); } else if (d < 16 && c.shotT <= 0 && this.map.world.los(c.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), e.chest(new THREE.Vector3()))) { c.shotT = 0.12; const from = c.pos.clone().add(new THREE.Vector3(0, 1.2, 0)); this.fx.tracer(from, e.chest(new THREE.Vector3())); this.fx.muzzle(from, c.dir, 'smg'); sfx('shot', { kind: 'smg', vol: 0.7 }); e.takeDamage(c.heavy ? 40 : 26, c.owner, 'body'); } }
       if (k >= 1) { this.scene.remove(c.mesh); this.cars.splice(i, 1); } }
     if (this.heli) { const h = this.heli; h.t -= dt; h.ang += dt * 0.35; h.rotor.rotation.y += dt * 30; const center = this.player ? this.player.pos : new THREE.Vector3(); h.mesh.position.set(center.x + Math.cos(h.ang) * 28, 32, center.z + Math.sin(h.ang) * 28); h.mesh.rotation.y = -h.ang; h.mesh.rotation.z = 0.15; this.fx.spot.position.copy(h.mesh.position); this.fx.spot.target.position.set(center.x, 0, center.z); this.fx.spot.target.updateMatrixWorld(); h.soundT -= dt; if (h.soundT <= 0) { h.soundT = 4; sfx('heli', { vol: 0.5 }); }
-      h.shotT -= dt; if (h.shotT <= 0) { h.shotT = 0.45; const es = this.enemiesOf(h.owner).filter((e) => e.alive && this.map.world.los(h.mesh.position, e.chest(new THREE.Vector3()))); if (es.length) { const e = this.rng.pick(es); const c = e.chest(new THREE.Vector3()).add(new THREE.Vector3(this.rng.float(-0.6, 0.6), 0, this.rng.float(-0.6, 0.6))); this.fx.tracer(h.mesh.position.clone(), c); sfx('shot', { kind: 'lmg', vol: 0.6 }); if (this.rng.chance(0.75)) { e.takeDamage(34, h.owner, 'body', c); this.fx.blood(c); } else this.fx.impact(c.clone().setY(0.05), new THREE.Vector3(0, 1, 0)); } }
+      h.shotT -= dt; if (h.shotT <= 0) { h.shotT = 0.45; const es = this.enemiesOf(h.owner).filter((e) => e.alive && this.map.world.los(h.mesh.position, e.chest(new THREE.Vector3()))); if (es.length) { const e = this.rng.pick(es); const c = e.chest(new THREE.Vector3()).add(new THREE.Vector3(this.rng.float(-0.6, 0.6), 0, this.rng.float(-0.6, 0.6))); this.fx.tracer(h.mesh.position.clone(), c); sfx('shot', { kind: 'lmg', vol: 0.6 }); if (this.rng.chance(0.75)) { e.takeDamage(34, h.owner, 'body', c); this.fx.blood(c, e.model.plastic); } else this.fx.impact(c.clone().setY(0.05), new THREE.Vector3(0, 1, 0)); } }
       if (h.t <= 0) { this.scene.remove(h.mesh); this.heli = null; this.fx.spot.intensity = 0; } }
   }
   cinematicDirector(dt) { // keep bots busy in the title screen

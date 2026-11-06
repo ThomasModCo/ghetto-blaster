@@ -93,7 +93,7 @@ export class Director {
     if (!this._visibleToPlayer(victim) || allowVisible) { // off-screen resolution
       m.audio('shot', null, victim.pos, { kind: killer.weapon.def.sound, vol: 0.5 });
       victim.takeDamage(1000, killer, this.rng.chance(0.2) ? 'head' : 'body', vChest);
-      m.fx.blood(vChest);
+      m.fx.blood(vChest, victim.model.plastic);
       this.log.push(`fate ${killer.name}->${victim.name}`);
       return true;
     }
