@@ -54,7 +54,7 @@ export class Engine {
     this.renderer.shadowMap.enabled = q !== 'low';
     this.maxMapLights = q === 'low' ? 4 : q === 'medium' ? 6 : 8;
     if (this.sun) { this.sun.castShadow = q !== 'low'; this.sun.shadow.mapSize.setScalar(q === 'high' ? 2048 : 1024); if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; } }
-    this.scene.traverse((o) => { if (o.material && o.material.needsUpdate !== undefined) o.material.needsUpdate = true; });
+    this.scene.traverse((o) => { if (o.material && o.material.needsUpdate !== undefined) o.material.needsUpdate = true; if (o.userData.kit) o.visible = q !== 'low'; });
   }
   _resize() {
     const w = window.innerWidth, h = window.innerHeight;

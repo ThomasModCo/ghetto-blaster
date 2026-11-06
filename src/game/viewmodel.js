@@ -2,6 +2,42 @@
 import * as THREE from 'three';
 import { buildGunMesh, plasticMat } from './character.js';
 import { damp, lerp, clamp } from '../core/rng.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// Sculpted toy-figure hands: four curled finger rings around the grip, a palm pad, a thumb, then a tapered forearm
+// into a hoodie cuff. Built in a local frame where the grip runs along Y, the palm faces -Z and the fingertips +Z.
+let HG = null;
+const handGeo = () => HG || (HG = {
+  finger: new THREE.TorusGeometry(0.024, 0.0118, 8, 14, Math.PI * 1.45),
+  pinky: new THREE.TorusGeometry(0.021, 0.0105, 8, 14, Math.PI * 1.45),
+  palm: new RoundedBoxGeometry(0.056, 0.088, 0.03, 3, 0.012),
+  thumb: new THREE.CapsuleGeometry(0.0125, 0.034, 4, 8),
+  arm: new THREE.CylinderGeometry(0.037, 0.03, 1, 12, 1, true),
+  sleeve: new THREE.CylinderGeometry(0.056, 0.047, 1, 14),
+  cuff: new THREE.TorusGeometry(0.049, 0.011, 8, 18),
+});
+const UP = new THREE.Vector3(0, 1, 0);
+function toyHand(skin, sleeve, { pos, rx = 0, ry = 0, rz = 0, armDir, thumbSide = 1 }) {
+  const G = handGeo(), g = new THREE.Group(); g.position.copy(pos);
+  const hand = new THREE.Group(); hand.rotation.set(rx, ry, rz, 'YXZ'); g.add(hand);
+  [0.03, 0.01, -0.01, -0.03].forEach((y, i) => {
+    const f = new THREE.Mesh(i === 3 ? G.pinky : G.finger, skin);
+    f.rotation.set(Math.PI / 2, 0, Math.PI * 0.775); // arc spans 0..1.45pi; this puts the gap (centre 1.725pi) on +Z
+    f.position.set(0, y, i === 3 ? -0.003 : 0); hand.add(f);
+  });
+  const palm = new THREE.Mesh(G.palm, skin); palm.position.set(0, -0.002, -0.026); hand.add(palm);
+  const th = new THREE.Mesh(G.thumb, skin); th.position.set(0.026 * thumbSide, 0.036, 0.004); th.rotation.set(Math.PI / 2 - 0.25, 0, 0.5 * thumbSide); hand.add(th);
+  // forearm runs from the wrist (behind and below the palm) along armDir, in the hands-group frame
+  const wrist = new THREE.Vector3(0, -0.035, -0.04).applyEuler(hand.rotation);
+  const dir = armDir.clone().normalize(), q = new THREE.Quaternion().setFromUnitVectors(UP, dir);
+  const seg = (geo, mat, from, len) => { const m = new THREE.Mesh(geo, mat); m.quaternion.copy(q); m.scale.set(1, len, 1); m.position.copy(wrist).addScaledVector(dir, from + len / 2); g.add(m); return m; };
+  seg(G.arm, skin, -0.01, 0.14);
+  seg(G.sleeve, sleeve, 0.12, 0.6);
+  const cuff = new THREE.Mesh(G.cuff, sleeve); cuff.quaternion.copy(q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+  cuff.position.copy(wrist).addScaledVector(dir, 0.125); g.add(cuff);
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+  return g;
+}
 
 const M = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: r, metalness: 0.02 });
 
@@ -25,11 +61,25 @@ export class ViewModel {
     this.weapon = w; this.gun = buildGunMesh(w, this.plastic, this.vmShade); this.gunHolder.add(this.gun);
     this.gun.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
     const d = w.model, len = d.len, h = d.h;
-    // right hand on the grip, left hand on the fore-end (pistols: both hands at the grip)
-    const hand = (x, y, z, rx) => { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.x = rx; const fist = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.07, 0.09), this.skinMat); g.add(fist); const arm = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.085, 0.3), this.sleeveMat); arm.position.set(0, -0.03, -0.18); arm.rotation.x = 0.35; g.add(arm); g.traverse((o) => { if (o.isMesh) { o.castShadow = false; } }); this.hands.add(g); };
-    hand(-0.01, -h / 2 - 0.085, len * 0.2, 0);
-    hand(d.pistol ? 0.03 : 0.0, d.pistol ? -h / 2 - 0.1 : -h / 2 - 0.02, d.pistol ? len * 0.22 : Math.min(len * 0.62, len - 0.05), d.pistol ? 0 : 0.2);
+    // right hand on the grip, left hand under the fore-end (pistols: left hand cups the right at the grip).
+    // gun space: +Z toward the muzzle, and gun -X is screen right (the holder is turned 180deg).
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    this.hands.add(toyHand(this.skinMat, this.sleeveMat, { pos: V(-0.005, -h / 2 - 0.07, len * 0.2 - 0.01), rx: -0.22, armDir: V(-0.28, -0.42, -1), thumbSide: 1 }));
+    if (d.pistol) this.hands.add(toyHand(this.skinMat, this.sleeveMat, { pos: V(0.035, -h / 2 - 0.1, len * 0.2 + 0.012), rx: -0.12, rz: 0.35, armDir: V(0.6, -0.5, -1), thumbSide: -1 }));
+    else {
+      // the generated gun meshes don't follow the old box profile, so find the real underside of the fore-end
+      const z = Math.min(len * 0.62, len - 0.06); let y = -h / 2 + 0.005;
+      const under = this._underside(z); if (under !== null) y = under + 0.024;
+      this.hands.add(toyHand(this.skinMat, this.sleeveMat, { pos: V(0.004, y, z), rx: -Math.PI / 2, rz: 0.15, armDir: V(0.95, -0.55, -0.75), thumbSide: -1 }));
+    }
     this.swapT = 0.35;
+  }
+  /** Lowest surface of the gun mesh at gun-space depth z (null if the ray misses). */
+  _underside(z) {
+    const H = this.gunHolder; H.updateMatrixWorld(true);
+    const o = H.localToWorld(new THREE.Vector3(0, -1, z)), up = H.localToWorld(new THREE.Vector3(0, 0, z)).sub(H.localToWorld(new THREE.Vector3(0, -1, z))).normalize();
+    const hit = new THREE.Raycaster(o, up, 0, 2).intersectObject(this.gun, true)[0];
+    return hit ? H.worldToLocal(hit.point.clone()).y : null;
   }
   muzzleWorld(out) { if (!this.gun) return out.copy(this.camera.position); return out.copy(this.gun.userData.muzzle).applyMatrix4(this.gun.matrixWorld); }
   onShot(w) { this.kick = Math.min(0.12, this.kick + w.recoilV * 0.02 + 0.015); this.kickRot = Math.min(0.25, this.kickRot + w.recoilV * 0.03); }

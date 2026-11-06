@@ -67,7 +67,7 @@ export class Actor {
     if (this.burstLeft > 0) { this.burstCd -= dt; }
     // model
     this.model.group.position.copy(this.body.pos); this.model.group.rotation.y = this.body.yaw;
-    this.model.update(dt, { speed: this.speed, moving: this.moving, sprint: this.sprint, crouch: this.body.crouch, ads: this.ads, onGround: this.body.onGround, pitch: this.pitch, lean: this.lean, dead: !this.alive, reloading: this.reloading, reloadT: this.reloadT, firing: this.firing && this.match.time - this.lastShotT < 0.08 });
+    this.model.update(dt, { speed: this.speed, moving: this.moving, sprint: this.sprint, crouch: this.body.crouch, ads: this.ads, onGround: this.body.onGround, pitch: this.pitch, lean: this.lean, dead: !this.alive, reloading: this.reloading, reloadT: this.reloadT, firing: this.firing && this.match.time - this.lastShotT < 0.08, jugg: this.fx.jugg > 0 });
     this.firing = false;
   }
   canFire() { const w = this.weapon; return this.alive && !this.reloading && this.swapT <= 0 && this.fireCd <= 0 && w.mag > 0 && this.fx.stun <= 0 && this.fx.knock <= 0; }

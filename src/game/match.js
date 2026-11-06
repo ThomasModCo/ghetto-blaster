@@ -22,7 +22,7 @@ export class Match {
     this.engine = engine; this.scene = engine.scene; this.camera = engine.camera; this.fx = engine.fx; this.input = input;
     this.map = map; this.mode = mode; this.settings = settings; this.mapId = mapId; this.cinematic = cinematic; this.bet = bet;
     this.seed = seed; this.rng = new RNG(seed ^ 0x9e3779b9);
-    this.scene.add(map.group);
+    this.scene.add(map.group); map.group.traverse((o) => { if (o.userData.kit) o.visible = engine.quality !== 'low'; }); // playset window surrounds: off on low quality
     this.actors = []; this.bots = []; this.player = null; this.crew = [];
     this.time = 0; this.elapsed = 0; this.state = 'pregame'; this.pregameT = cinematic ? 0 : 7; this.frozen = !cinematic;
     this.teamScore = [0, 0]; this.feed = []; this.events = {};

@@ -155,6 +155,7 @@ export class CharacterModel {
     this.shadowOnly = false;
     // generated skinned figure: the box rig stays as the (invisible) animation driver
     const tpl = MODELS.figures.get(figureKey(faction, hat));
+    this.armorMat = P(1).clone(); this.armorMat.color.multiplyScalar(0.45); this.armorMat.roughness = 0.55; // Trap House Armor plates: same plastic, molded darker
     if (tpl) { const fig = new Figure(tpl, P(1), s); if (fig.ok) { this.group.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = fig; this.group.add(fig.root); } }
   }
   setGun(weapon) {
@@ -224,6 +225,7 @@ export class CharacterModel {
     this._applyFigure(st);
   }
   _applyFigure(st) {
+    if (this.figure && (st.jugg || this.figure.armor)) this.figure.setArmor(!!st.jugg && !st.dead, this.armorMat);
     if (!this.figure) return;
     const hands = this.gunMesh && this.grips ? { obj: this.gunMesh, Right: this.grips.Right, Left: st.reloading ? this._reloadHand(st) : this.grips.Left } : null;
     this.figure.apply(this, hands);
@@ -245,7 +247,13 @@ export class CharacterModel {
     this.armR = new THREE.Group(); this.armL = new THREE.Group(); this.legR = new THREE.Group(); this.legL = new THREE.Group(); this.gunMount = new THREE.Group(); this.torso.add(this.gunMount); this.gunMesh = null;
     if (MODELS.dog) { // generated dog (static mid-gallop pose): ride it on the torso so the bob and death roll still apply
       this.torso.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = null;
-      const dg = MODELS.dog.clone(); dg.traverse((o) => { if (o.isMesh) { o.material = m; o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg); }
+      const dg = MODELS.dog.clone(); dg.traverse((o) => { if (o.isMesh) { o.material = m; o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg);
+      const c = MODELS.dogCollar; if (c) { // studded collar in the owner's colour
+        const cm = plasticMat(this.plastic || FACTION_PLASTIC.gang, 1, 0.3), col = new THREE.Mesh(new THREE.TorusGeometry(c.r, Math.max(0.018, c.r * 0.16), 8, 20), cm);
+        col.position.set(c.x, c.y - 0.55, c.z); col.rotation.x = 0.35; col.castShadow = true; this.torso.add(col);
+        for (let i = 0; i < 6; i++) { const a = -Math.PI * 0.15 + (i / 5) * Math.PI * 1.3; const st = new THREE.Mesh(new THREE.SphereGeometry(c.r * 0.11, 6, 4), cm); st.position.set(Math.cos(a) * c.r * 1.12, Math.sin(a) * c.r * 1.12, 0); col.add(st); }
+      }
+      this.dogBody = dg; }
     this.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
   updateDog(dt, st) {
@@ -256,6 +264,8 @@ export class CharacterModel {
     this.legs.forEach((l, i) => { l.rotation.x = Math.sin(this.phase + (i % 3 === 0 ? 0 : Math.PI)) * amp; });
     this.hips.position.y = 0.55 + Math.abs(Math.sin(this.phase)) * 0.06 * amp;
     this.neck.rotation.x = -(st.pitch || 0) * 0.5;
+    // static gallop pose: rock and stretch the body with the stride so the run reads
+    if (this.dogBody) { const s = Math.sin(this.phase * 2); this.torso.rotation.x = s * 0.09 * amp; this.dogBody.scale.set(1, 1 - s * 0.04 * amp, 1 + s * 0.06 * amp); }
   }
   /** Toy death: after the fall the plastic slumps and spreads a little. */
   _melt() { const k = clamp((this.deathT - 0.55) / 1.4, 0, 1), e = k * (2 - k); this.group.scale.set(1 + e * 0.14, 1 - e * 0.32, 1 + e * 0.14); }

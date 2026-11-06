@@ -106,7 +106,7 @@ const PROP_INFO = {
 };
 const PROP_NAMES = { ac: 'AC unit', neonSign: 'Neon sign', trafficlight: 'Traffic light', busstop: 'Bus stop', phonebooth: 'Phone booth', newsstand: 'Newsstand', stopsign: 'Stop sign', watertower: 'Water tower', deadtree: 'Dead tree', trashcan: 'Trash can', trashpile: 'Trash pile', jersey: 'Jersey barrier', barrier: 'Concrete barrier', hoop: 'Basketball hoop', court: 'Sports court', dish: 'Satellite dish', picnic: 'Picnic table', tires: 'Tyre stack', cart: 'Shopping cart', pipes: 'Pipe stack', pallet: 'Pallet', tomb: 'Tomb', grave: 'Gravestone' };
 const PROP_VIEW = { court: 'top', laundry: 'front', billboard: 'front', neonSign: 'front', sign: 'front', stopsign: 'front', overpass: 'iso' };
-function propBuilder() { return new MapBuilder({ id: 'catalog', size: 160, seed: 3, lightBudget: 0 }); }
+function propBuilder() { return new MapBuilder({ id: 'catalog', size: 160, seed: 3, lightBudget: 0, immediateKit: true }); }
 function colliderSize(world) {
   if (!world.boxes.length) return 'none (visual only)';
   const b = new THREE.Box3(); for (const x of world.boxes) b.union(new THREE.Box3(x.min, x.max)); const s = b.getSize(V());

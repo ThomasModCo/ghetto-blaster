@@ -40,6 +40,37 @@ export class Figure {
     this.ankleH = (this.rest.LeftFoot.p.y + this.rest.RightFoot.p.y) / 2;
     this.posScale = 1 / this.b.Hips.parent.matrixWorld.getMaxScaleOnAxis(); // group metres -> Armature units (cm)
   }
+  /** Trap House Armor: a molded plate carrier, shoulder plates and a helmet, parented to the chest, arm and head
+   *  bones so they follow the pose. Built lazily the first time the streak is active. */
+  setArmor(on, material) {
+    if (!this.ok) return;
+    if (!this.armor && on) this._buildArmor(material);
+    if (this.armor) for (const a of this.armor) a.visible = on;
+  }
+  _buildArmor(material) {
+    const R = this.rest, sh = R.LeftArm.p.distanceTo(R.RightArm.p), head = R.Head.p, chest = R.Spine02.p, hips = R.Hips.p;
+    const box = (w, h, d, c) => { const g = new THREE.BoxGeometry(w, h, d, 2, 2, 2), pa = g.attributes.position, v = V(); // pillowed box: corners pulled in
+      for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i); const k = 1 - c * (Math.abs(v.x / (w / 2)) * Math.abs(v.y / (h / 2)) + Math.abs(v.y / (h / 2)) * Math.abs(v.z / (d / 2)) + Math.abs(v.x / (w / 2)) * Math.abs(v.z / (d / 2))) / 3; pa.setXYZ(i, v.x * k, v.y * k, v.z * k); }
+      g.computeVertexNormals(); return g; };
+    const mesh = (geo) => { const m = new THREE.Mesh(geo, material); m.castShadow = true; return m; };
+    this.armor = [];
+    const attach = (bone, obj, gx, gy, gz) => { // place obj at group-space rest position, keep it upright in the rest pose
+      const bw = this.b[bone].matrixWorld, inv = new THREE.Matrix4().copy(bw).invert();
+      const M = new THREE.Matrix4().compose(V().set(gx, gy, gz), Q(), V().setScalar(1)).premultiply(inv);
+      M.decompose(obj.position, obj.quaternion, obj.scale); this.b[bone].add(obj); obj.visible = false; this.armor.push(obj);
+    };
+    const neckY = R.neck.p.y, top = neckY - (neckY - hips.y) * 0.04, bot = hips.y + (neckY - hips.y) * 0.3, torsoH = Math.max(0.2, top - bot);
+    const vest = new THREE.Group(); vest.add(mesh(box(sh * 1.6, torsoH, sh * 1.2, 0.45)));
+    const pouch = box(sh * 0.17, sh * 0.16, sh * 0.1, 0.4); for (const x of [-0.24, 0, 0.24]) { const p = mesh(pouch); p.position.set(x * sh * 1.5, -torsoH * 0.28, sh * 0.62); vest.add(p); }
+    const collar = mesh(new THREE.TorusGeometry(sh * 0.3, sh * 0.08, 8, 16)); collar.rotation.x = Math.PI / 2; collar.position.y = torsoH * 0.5; vest.add(collar);
+    attach('Spine02', vest, chest.x, (top + bot) / 2, chest.z + sh * 0.04);
+    for (const side of ['Left', 'Right']) { const a = R[side + 'Arm'].p; const pad = mesh(box(sh * 0.42, sh * 0.16, sh * 0.48, 0.6)); attach(side + 'Arm', pad, a.x * 1.05, a.y + sh * 0.1, a.z); }
+    const hr = sh * 0.44, helm = new THREE.Group();
+    const dome = mesh(new THREE.SphereGeometry(hr, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55)); dome.scale.set(1, 0.92, 1.08); helm.add(dome);
+    const brim = mesh(new THREE.CylinderGeometry(hr * 1.06, hr * 1.1, hr * 0.12, 18)); brim.position.y = hr * 0.05; helm.add(brim);
+    const visor = mesh(box(hr * 1.5, hr * 0.42, hr * 0.2, 0.5)); visor.position.set(0, -hr * 0.2, hr * 0.95); helm.add(visor);
+    attach('Head', helm, head.x, head.y + hr * 0.75, head.z + hr * 0.05);
+  }
   // ---- helpers (all in group space) ----
   _driverQ(obj, out) { _m.multiplyMatrices(_invG, obj.matrixWorld); _m.decompose(_p, out, _s); return out; }
   _driverPos(obj, local, out) { out.copy(local); obj.localToWorld(out); return out.applyMatrix4(_invG); }
