@@ -39,7 +39,6 @@ function toyHand(skin, sleeve, { pos, rx = 0, ry = 0, rz = 0, armDir, thumbSide 
   return g;
 }
 
-const M = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: r, metalness: 0.02 });
 
 export class ViewModel {
   constructor(camera, { plastic = '#1e4fc0' } = {}) {

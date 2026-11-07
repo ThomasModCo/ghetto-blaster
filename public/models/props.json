@@ -12,9 +12,18 @@
   "file": "models/prop_bench.glb",
   "tint": false,
   "size": [
-   1.745,
+   1.75,
    1.52,
-   1.115
+   1.123
+  ]
+ },
+ "brass": {
+  "file": "models/prop_brass.glb",
+  "tint": true,
+  "size": [
+   1.865,
+   1.9,
+   1.102
   ]
  },
  "bus": {
@@ -30,8 +39,8 @@
   "file": "models/prop_busstop.glb",
   "tint": false,
   "size": [
-   3.114,
-   2.688,
+   3.113,
+   2.695,
    2
   ]
  },
@@ -71,6 +80,15 @@
    1
   ]
  },
+ "driveby": {
+  "file": "models/prop_driveby.glb",
+  "tint": true,
+  "size": [
+   1.9,
+   1.75,
+   4.4
+  ]
+ },
  "dumpster": {
   "file": "models/prop_dumpster.glb",
   "tint": true,
@@ -80,22 +98,58 @@
    1.3
   ]
  },
+ "gator": {
+  "file": "models/prop_gator.glb",
+  "tint": false,
+  "size": [
+   1.363,
+   0.7,
+   2.3
+  ]
+ },
+ "heli": {
+  "file": "models/prop_heli.glb",
+  "tint": false,
+  "size": [
+   3.634,
+   6.31,
+   10
+  ]
+ },
  "hydrant": {
   "file": "models/prop_hydrant.glb",
   "tint": false,
   "size": [
-   0.821,
+   0.827,
    1,
-   0.728
+   0.727
   ]
  },
  "lamp": {
   "file": "models/prop_lamp.glb",
   "tint": false,
   "size": [
-   1.158,
+   1.151,
    6.2,
    3.92
+  ]
+ },
+ "lowrider": {
+  "file": "models/prop_lowrider.glb",
+  "tint": true,
+  "size": [
+   2,
+   1.35,
+   5.4
+  ]
+ },
+ "nest": {
+  "file": "models/prop_nest.glb",
+  "tint": false,
+  "size": [
+   2.253,
+   0.932,
+   2.2
   ]
  },
  "newsstand": {
@@ -111,17 +165,17 @@
   "file": "models/prop_palm.glb",
   "tint": false,
   "size": [
-   4.651,
+   4.67,
    9,
-   3.957
+   3.973
   ]
  },
  "phonebooth": {
   "file": "models/prop_phonebooth.glb",
   "tint": true,
   "size": [
-   0.984,
-   2.385,
+   0.985,
+   2.391,
    1.125
   ]
  },
@@ -129,9 +183,9 @@
   "file": "models/prop_stall.glb",
   "tint": true,
   "size": [
-   2.651,
+   2.667,
    3.125,
-   1.769
+   1.781
   ]
  },
  "tires": {
@@ -147,16 +201,16 @@
   "file": "models/prop_trafficlight.glb",
   "tint": false,
   "size": [
-   1.229,
+   1.228,
    5.6,
-   4.743
+   4.739
   ]
  },
  "trashcan": {
   "file": "models/prop_trashcan.glb",
   "tint": false,
   "size": [
-   0.825,
+   0.824,
    1.05,
    0.744
   ]
@@ -165,7 +219,7 @@
   "file": "models/prop_trashpile.glb",
   "tint": false,
   "size": [
-   1.774,
+   1.759,
    1.171,
    1.9
   ]
@@ -174,9 +228,9 @@
   "file": "models/prop_tree.glb",
   "tint": false,
   "size": [
-   4.338,
+   4.351,
    5.4,
-   3.594
+   3.576
   ]
  },
  "truck": {

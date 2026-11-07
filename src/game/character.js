@@ -2,14 +2,11 @@
 // Toy reskin: every figure, gun and throwable is molded in ONE solid glossy plastic colour (team, FFA slot or faction).
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { MODELS, figureKey } from './models.js';
+import { MODELS, figureKey, propMaterial } from './models.js';
 import { Figure } from './figure.js';
 import { clamp, damp } from '../core/rng.js';
 import { SKIN_TONES, HOODIE_COLORS } from './names.js';
 const SKIN_TONE_SLOTS = SKIN_TONES, HOODIE_SLOTS = HOODIE_COLORS; // only used to replay the legacy RNG draws
-
-const matCache = new Map();
-const M = (c, r = 0.85, m = 0.02) => { const k = c + r + m; if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: r, metalness: m })); return matCache.get(k); };
 
 // ---- plastic ----
 export const TEAM_COLORS = ['#1e4fc0', '#b3271f']; // cobalt crew, crimson crew
@@ -231,7 +228,7 @@ export class CharacterModel {
     this.figure.apply(this, hands);
   }
   _reloadHand(st) { const v = (this._rh || (this._rh = new THREE.Vector3())).copy(this.grips.mag); v.y += Math.sin((st.reloadT || 0) * 9) * 0.06; return v; }
-  makeDog() {
+  makeDog(gator = false) {
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     this.figure = null; this.isDog = true; const m = plasticMat(FACTION_PLASTIC.dog, 1, 0.3), d = plasticMat(FACTION_PLASTIC.dog, 0.6, 0.35);
     this.hips = new THREE.Group(); this.hips.position.y = 0.55; this.group.add(this.hips);
@@ -245,9 +242,13 @@ export class CharacterModel {
     for (const [x, z] of [[-0.11, 0.3], [0.11, 0.3], [-0.11, -0.3], [0.11, -0.3]]) { const l = new THREE.Group(); l.position.set(x, -0.15, z); l.add(bx(0.1, 0.42, 0.12, m, 0, -0.2, 0)); this.torso.add(l); this.legs.push(l); }
     const tail = bx(0.06, 0.06, 0.3, m, 0, 0.1, -0.5); tail.rotation.x = -0.6; this.torso.add(tail);
     this.armR = new THREE.Group(); this.armL = new THREE.Group(); this.legR = new THREE.Group(); this.legL = new THREE.Group(); this.gunMount = new THREE.Group(); this.torso.add(this.gunMount); this.gunMesh = null;
-    if (MODELS.dog) { // generated dog (static mid-gallop pose): ride it on the torso so the bob and death roll still apply
+    const gt = gator && MODELS.props.get('gator');
+    if (gt) { // generated alligator for GATOR SEASON: same dog rig and AI, low body, smaller leg swing
+      this.torso.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = null; this.legAmp = 0.3;
+      this.dogLegs = gallopMaterial(propMaterial(null)); const gm = new THREE.Mesh(gt.geo, this.dogLegs.material(gt.geo)); gm.castShadow = true; gm.position.y = -0.55; this.torso.add(gm); this.dogBody = gm;
+    } else if (MODELS.dog) { // generated dog (static mid-gallop pose): ride it on the torso so the bob and death roll still apply
       this.torso.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = null;
-      const dg = MODELS.dog.clone(); dg.traverse((o) => { if (o.isMesh) { o.material = m; o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg);
+      const dg = MODELS.dog.clone(); this.dogLegs = gallopMaterial(m); dg.traverse((o) => { if (o.isMesh) { o.material = this.dogLegs.material(o.geometry); o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg);
       const c = MODELS.dogCollar; if (c) { // studded collar in the owner's colour
         const cm = plasticMat(this.plastic || FACTION_PLASTIC.gang, 1, 0.3), col = new THREE.Mesh(new THREE.TorusGeometry(c.r, Math.max(0.018, c.r * 0.16), 8, 20), cm);
         col.position.set(c.x, c.y - 0.55, c.z); col.rotation.x = 0.35; col.castShadow = true; this.torso.add(col);
@@ -265,6 +266,7 @@ export class CharacterModel {
     this.hips.position.y = 0.55 + Math.abs(Math.sin(this.phase)) * 0.06 * amp;
     this.neck.rotation.x = -(st.pitch || 0) * 0.5;
     // static gallop pose: rock and stretch the body with the stride so the run reads
+    if (this.dogLegs) { this.dogLegs.uniforms.uPhase.value = this.phase * 2; this.dogLegs.uniforms.uAmp.value = (this.legAmp ?? 0.55) * amp; }
     if (this.dogBody) { const s = Math.sin(this.phase * 2); this.torso.rotation.x = s * 0.09 * amp; this.dogBody.scale.set(1, 1 - s * 0.04 * amp, 1 + s * 0.06 * amp); }
   }
   /** Toy death: after the fall the plastic slumps and spreads a little. */
@@ -274,4 +276,32 @@ export class CharacterModel {
   hit() { this.flinch = 1; }
   setVisible(v) { this.group.visible = v; }
   dispose() { this.group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+}
+
+/**
+ * Leg motion for the generated animals, which are one static mid-stride mesh: a vertex shader swings everything below
+ * the hips fore and aft around the hip line, front and back pairs in opposite phase and left/right offset (a gallop).
+ * Bounds come from each mesh's own local bounding box, so it works on the quantised GLB as loaded.
+ */
+export function gallopMaterial(base) {
+  const uniforms = { uPhase: { value: 0 }, uAmp: { value: 0 } };
+  return {
+    uniforms,
+    material(geo) {
+      geo.computeBoundingBox(); const bb = geo.boundingBox;
+      const hip = bb.min.y + (bb.max.y - bb.min.y) * 0.45, cz = (bb.min.z + bb.max.z) / 2, cx = (bb.min.x + bb.max.x) / 2;
+      const m = base.clone(), prev = base.onBeforeCompile; m.vertexColors = base.vertexColors; m.userData = { ...base.userData };
+      m.onBeforeCompile = (sh, r) => {
+        prev.call(base, sh, r);
+        Object.assign(sh.uniforms, uniforms); sh.uniforms.uLeg = { value: new THREE.Vector4(hip, bb.min.y, cz, cx) };
+        sh.vertexShader = 'uniform float uPhase; uniform float uAmp; uniform vec4 uLeg;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+          float legW = clamp((uLeg.x - transformed.y) / max(1e-4, uLeg.x - uLeg.y), 0.0, 1.0);
+          float ph = uPhase + (transformed.z > uLeg.z ? 0.0 : 3.14159) + (transformed.x > uLeg.w ? 0.0 : 0.9);
+          float a = sin(ph) * uAmp * legW; float dy = transformed.y - uLeg.x;
+          if (legW > 0.0) { transformed.z += dy * sin(a); transformed.y = uLeg.x + dy * cos(a); }`);
+      };
+      m.customProgramCacheKey = () => 'gallop|' + base.customProgramCacheKey();
+      return m;
+    },
+  };
 }

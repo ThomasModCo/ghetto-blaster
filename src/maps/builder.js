@@ -6,8 +6,8 @@ import { NavGrid } from './nav.js';
 import { tex } from '../core/textures.js';
 import { RNG } from '../core/rng.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { chamferBox, scaleFaceUVs, trimColor, windowFrameGeo, facadeWindows } from './kit.js';
-import { MODELS } from '../game/models.js';
+import { chamferBox, scaleFaceUVs, splitGroups, trimColor, windowFrameGeo, facadeWindows } from './kit.js';
+import { MODELS, propMaterial } from '../game/models.js';
 
 const matCache = new Map();
 export function mat(name, params = {}, extra = {}) {
@@ -20,12 +20,17 @@ export function mat(name, params = {}, extra = {}) {
   m.userData.params = params; matCache.set(key, m); return m;
 }
 const col = (c, r = 0.85, mt = 0.05) => mat('color', { color: c, rough: r, metal: mt });
+/** Tiled copy of a textured material. Repeats snap to quarter steps and copies are shared, so walls with the same
+ *  texture and similar size end up with the same material and merge into one draw call. */
+const repeatCache = new Map();
+function repeatMaterial(material, repeat) {
+  const rx = Math.max(0.25, Math.round(repeat[0] * 4) / 4), ry = Math.max(0.25, Math.round(repeat[1] * 4) / 4), key = material.uuid + '|' + rx + '|' + ry;
+  let mm = repeatCache.get(key);
+  if (!mm) { mm = material.clone(); mm.map = material.map.clone(); mm.map.repeat.set(rx, ry); mm.map.needsUpdate = true; mm.userData = { ...material.userData }; repeatCache.set(key, mm); }
+  return mm;
+}
 const KIT_WINDOW_MAX_Y = 13; // 3D window surrounds only up to ~4 floors
 
-/** Scale UVs of a BoxGeometry uniformly (tiling a shared material instead of cloning it with a different repeat). */
-function scaleBoxUVs(geo, sx, sy) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * sx, uv.getY(i) * sy); uv.needsUpdate = true; }
-/** Per-face UV scale for BoxGeometry: faces are +x, -x, +y, -y, +z, -z with 4 vertices each. null leaves a face as is. */
-function scaleBoxFaceUVs(geo, ...faces) { const uv = geo.attributes.uv; faces.forEach((f, fi) => { if (!f) return; for (let i = fi * 4; i < fi * 4 + 4; i++) uv.setXY(i, uv.getX(i) * f[0], uv.getY(i) * f[1]); }); uv.needsUpdate = true; }
 
 export class MapBuilder {
   constructor(def) {
@@ -59,7 +64,7 @@ export class MapBuilder {
   box({ x, y = 0, z, w, h, d, m = null, color = '#888', rot = 0, collide = true, walkable = true, repeat = null, tag, kind, castShadow = true }) {
     const material = m || col(color);
     const geo = chamferBox(w, h, d, Math.min(0.07, Math.min(w, h, d) * 0.18));
-    if (repeat && material.map) { const mm = material.clone(); mm.map = material.map.clone(); mm.map.repeat.set(repeat[0], repeat[1]); mm.map.needsUpdate = true; const mesh = this._mesh(geo, mm, x, y + h / 2, z, rot, castShadow); if (collide) this._collide(x, y, z, w, h, d, rot, { walkable, tag, kind }); return mesh; }
+    if (repeat && material.map) { const mm = repeatMaterial(material, repeat); const mesh = this._mesh(geo, mm, x, y + h / 2, z, rot, castShadow); if (collide) this._collide(x, y, z, w, h, d, rot, { walkable, tag, kind }); return mesh; }
     const mesh = this._mesh(geo, material, x, y + h / 2, z, rot, castShadow);
     if (collide) this._collide(x, y, z, w, h, d, rot, { walkable, tag, kind });
     return mesh;
@@ -127,11 +132,13 @@ export class MapBuilder {
     // facade materials are shared across buildings (a handful of seeds per look) so merged geometry batches well
     const fm = mat('facade', { seed: 1 + (rng.int(1, 9999) % 5), wall, style: fstyle, cols: 3, rows: 2, lit, winColor, balcony: balcony || style === 'tenement', shutters, ac: style !== 'glass' }, { roughness: style === 'glass' ? 0.35 : 0.9, metalness: style === 'glass' ? 0.3 : 0.02 });
     const roofMat = mat('concrete', { color: '#55544f', seed: 21 });
-    const mats = [fm, fm, roofMat, roofMat, fm, fm];
     const geo = chamferBox(w, h, d, 0.2);
     const ry = Math.max(1, floors / 2), Rd = Math.max(1, Math.round(d / 9)), Rw = Math.max(1, Math.round(w / 9));
     scaleFaceUVs(geo, [Rd, ry], [Rd, ry], null, null, [Rw, ry], [Rw, ry]);
-    const mesh = this._mesh(geo, mats, x, h / 2, z, rot);
+    // walls and roof as two single-material meshes (not one 6-group mesh): the static merge can then batch every
+    // building that shares a facade material into one draw call
+    const [walls, caps] = splitGroups(geo, [[0, 1, 4, 5], [2, 3]]);
+    const mesh = this._mesh(walls, fm, x, h / 2, z, rot); this._mesh(caps, roofMat, x, h / 2, z, rot);
     this._buildingKit({ x, z, w, d, h, rot, wall, style, floors, Rd, Rw, ry, parapet: roof === 'parapet' && style !== 'shanty' });
     this._collide(x, 0, z, w, h, d, rot, { kind: 'building' });
     this.footprints.push({ x, z, w, d, rot, h });
@@ -323,7 +330,7 @@ export class MapBuilder {
     // Run the original builder into a throwaway group: it makes exactly the same RNG draws, colliders, lights and
     // landmarks as before, so layouts, nav and pre-planned outcomes can't change. Then show the generated mesh instead,
     // in the colour and at the size the original picked; sticker decals (signs, adverts, van lettering) are kept.
-    const real = this.group, tmp = new THREE.Group(); this.group = tmp;
+    const real = this.group, tmp = new THREE.Group(), nLights = this.lights.length; this.group = tmp;
     try { P.call(this, x, z, rot, o, rng); } finally { this.group = real; }
     tmp.updateMatrixWorld(true);
     const m = new THREE.Mesh(tpl.geo, propMaterial(tpl.tint ? propTint(tmp) : null));
@@ -332,6 +339,7 @@ export class MapBuilder {
     m.position.set(x + Math.cos(rot) * off[0] + Math.sin(rot) * off[2], (o.y || 0) + off[1], z - Math.sin(rot) * off[0] + Math.cos(rot) * off[2]);
     if (G.stretchX) m.scale.x = G.stretchX(tmp, o);
     m.castShadow = true; m.receiveShadow = true; this.group.add(m);
+    if (G.head) G.head.call(this, tpl, m, o, nLights);
     if (G.keep) { const keep = []; tmp.traverse((c) => { if (c.isMesh && c.material && c.material.map && G.keep(c)) keep.push(c); }); for (const c of keep) { c.getWorldPosition(c.position); c.getWorldQuaternion(c.quaternion); c.getWorldScale(c.scale); c.removeFromParent(); this.group.add(c); } }
   }
   /** Registers a point light definition. The engine streams the nearest few through a fixed pool, so maps can define many. */
@@ -382,7 +390,6 @@ export class MapBuilder {
     table.position.y = ty - 1.5; table.receiveShadow = true; this.group.add(table);
     // giant props read as roughly 2.5 cm toy scale (~1 cm = 0.8 m); every prop is a group anchored on the table top
     const K = 2.2; const prop = (x, z) => { const g = new THREE.Group(); g.position.set(x, ty, z); g.scale.setScalar(K); this.group.add(g); return g; };
-    const add = (geo, m, x, y, z, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(0, ry, rz); o.castShadow = true; o.receiveShadow = true; this.group.add(o); return o; };
     // spots around the board, one or two objects per side, beyond the board edge
     const spot = (side, along, out) => { const d = B + out * K; return side === 0 ? [along, d] : side === 1 ? [along, -d] : side === 2 ? [d, along] : [-d, along]; };
     const sides = rng.shuffle([0, 1, 2, 3]);
@@ -484,17 +491,6 @@ export class MapBuilder {
 // ---------------- Prop library ----------------
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // ---- generated playset props ----
-const _propMats = new Map();
-/** Vertex-coloured prop material. The colour attribute's alpha is a tint mask: where it is 1 the molded body takes the
- *  material colour (a car's paint, a dumpster's green), where it is 0 the baked colour is kept (tyres, glass, wood). */
-function propMaterial(tint) {
-  const key = tint || 'none'; if (_propMats.has(key)) return _propMats.get(key);
-  const m = new THREE.MeshStandardMaterial({ color: tint || '#ffffff', vertexColors: true, roughness: 0.5, metalness: 0.02 });
-  m.userData.prop = true;
-  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#if defined( USE_COLOR_ALPHA )\n diffuseColor.rgb = mix( vColor.rgb, vColor.rgb * diffuseColor.rgb, vColor.a );\n#elif defined( USE_COLOR )\n diffuseColor.rgb *= vColor;\n#endif'); };
-  m.customProgramCacheKey = () => 'playset-prop';
-  _propMats.set(key, m); return m;
-}
 /** The colour the original builder chose: an explicit tint tag, else the colour of its biggest mesh. */
 function propTint(tmp) {
   let tag = null; tmp.traverse((c) => { if (c.userData.tint) tag = c.userData.tint; }); if (tag) return tag;
@@ -502,13 +498,21 @@ function propTint(tmp) {
   tmp.traverse((c) => { if (!c.isMesh || !c.geometry) return; c.geometry.computeBoundingBox(); b.copy(c.geometry.boundingBox).getSize(v); const vv = v.x * v.y * v.z * c.scale.x * c.scale.y * c.scale.z; if (vv > vol) { vol = vv; best = c; } });
   if (!best) return '#888888'; const mm = best.material; return mm.userData?.params?.color || '#' + mm.color.getHexString();
 }
+const LENS_GEO = new THREE.CylinderGeometry(0.2, 0.24, 0.06, 12), LENS_MAT = new THREE.MeshStandardMaterial({ color: '#fff', emissive: '#ffd9a0', emissiveIntensity: 1.4 });
 const geoSize = (mesh, axis) => { mesh.geometry.computeBoundingBox(); const bb = mesh.geometry.boundingBox; return bb.max[axis] - bb.min[axis]; };
 const firstMesh = (tmp, pred = () => true) => { let f = null; tmp.traverse((c) => { if (!f && c.isMesh && pred(c)) f = c; }); return f; };
 const hasMap = (c) => !!c.material.map;
 /** Which props use a generated mesh, and how to read the original's scale from its throwaway build. */
 const GLB_PROPS = {
+  // lamp: the generated arm is longer than the old one, so the lens and the streamed light go to the real head
+  lamp: { head(tpl, m, o, nLights) {
+    const bb = tpl.geo.boundingBox, reach = bb.max.z - 0.32, y = bb.max.y - 0.28, sx = Math.sin(m.rotation.y), cz = Math.cos(m.rotation.y);
+    const hx = m.position.x + sx * reach, hz = m.position.z + cz * reach;
+    if (o.on !== false) { const lens = new THREE.Mesh(LENS_GEO, LENS_MAT); lens.position.set(hx, y, hz); lens.rotation.y = m.rotation.y; this.group.add(lens); }
+    for (let i = nLights; i < this.lights.length; i++) { const L = this.lights[i]; L.x = hx; L.z = hz; L.y = y - 0.4; }
+  } },
   car: {}, van: { keep: hasMap }, truck: { offset: [0, 0, -0.125] }, bus: {}, dumpster: {}, phonebooth: {}, busstop: { keep: hasMap }, newsstand: { keep: hasMap },
-  stall: {}, tires: {}, trafficlight: {}, trashcan: {}, barrel: {}, bench: {}, lamp: {}, hydrant: {}, cone: {}, trashpile: {},
+  stall: {}, tires: {}, trafficlight: {}, trashcan: {}, barrel: {}, bench: {}, hydrant: {}, cone: {}, trashpile: {},
   crate: { scale: (tmp) => geoSize(firstMesh(tmp), 'x') },
   container: { stretchX: (tmp, o) => (o.len || 6) / 6 },
   tree: { scale: (tmp) => firstMesh(tmp, (c) => c.geometry.type === 'CylinderGeometry').geometry.parameters.radiusTop / 0.22 },

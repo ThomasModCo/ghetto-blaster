@@ -9,6 +9,7 @@ import { streaksForMap } from '../game/streaks.js';
 import { SKIN_TONES, HOODIE_COLORS, FACTIONS } from '../game/names.js';
 import { ViewModel } from '../game/viewmodel.js';
 import { MapBuilder, PROP_TYPES } from '../maps/builder.js';
+import { unitMesh } from '../game/models.js';
 import { MAPS } from '../maps/index.js';
 import { tex } from '../core/textures.js';
 import { FX, MUZZLE_PROFILES } from '../core/engine.js';
@@ -49,6 +50,16 @@ function characterItems() {
     build: () => { const m = new CharacterModel({ rng: new RNG(2) }); m.makeDog(); m.updateDog(0.1, { speed: 0, moving: false, onGround: true, pitch: 0, dead: false }); m.group.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return m.group; },
     info: [['Used by', 'Pitbull, Gator Season streaks'], ['Animation', 'Four-leg gallop cycle, head pitch, death roll']], notes: 'Origin at the feet, forward +Z. Legs are four pivots under the torso.',
   });
+  // generated streak units (toy reskin); each falls back to an empty slot when models aren't loaded
+  const unit = (id, tint) => () => { const g = new THREE.Group(); const m = unitMesh(id, tint); if (m) g.add(m); return g; };
+  for (const [id, name, desc, used, tint] of [
+    ['heli', 'Police helicopter', 'GHETTO BIRD: circles the block at 32 m with a spotlight, gunning enemies. A two-blade rotor spins on the molded mast in game.', 'Ghetto Bird', null],
+    ['lowrider', 'Armored lowrider', 'LOW RIDER: plows down the lane the caller is aiming at. Molded in the caller\'s colour.', 'Low Rider', TEAM_COLORS[1]],
+    ['driveby', 'Drive-by sedan', 'Drive-by car with a crew member leaning out of the back window. Molded in the caller\'s colour.', 'Drive-by', TEAM_COLORS[0]],
+    ['nest', 'Sandbag nest', 'ROOFTOP SHOOTER: sandbag emplacement with a mounted gun; turns with the crouched gunner inside.', 'Rooftop Shooter', null],
+    ['gator', 'Alligator', 'GATOR SEASON: runs the streets hunting enemies on the pitbull\'s rig and AI.', 'Gator Season', null],
+    ['brass', 'Brass band', 'BRASS BAND: a second line that draws every enemy toward the decoy. Molded in the caller\'s colour.', 'Brass Band', TEAM_COLORS[0]],
+  ]) items.push({ id: 'streak:' + id, name, category: 'Characters', group: 'Streak units', view: 'iso', desc, tags: ['streak', 'unit', id], source: 'src/game/match.js · unitMesh(\'' + id + '\')', build: unit(id, tint), info: [['Used by', used], ['Model', 'Generated playset mesh (public/models/prop_' + id + '.glb)']], notes: 'Visual only: spawning, damage and timing are unchanged.' });
   items.push({
     id: 'character:fp-hands', name: 'First-person hands', category: 'Characters', group: 'View model', view: 'low', grounded: false, desc: 'The player\'s hands and sleeves holding the current weapon in first person.',
     tags: ['viewmodel', 'first person', 'hands', 'arms'], source: 'src/game/viewmodel.js · ViewModel',

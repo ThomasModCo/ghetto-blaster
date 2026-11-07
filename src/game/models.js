@@ -8,6 +8,22 @@ import * as THREE from 'three';
 
 export const MODELS = { ready: false, figures: new Map(), guns: new Map(), dog: null, props: new Map() };
 
+const _propMats = new Map();
+/** Vertex-coloured prop material. The colour attribute's alpha is a tint mask: where it is 1 the molded body takes the
+ *  material colour (a car's paint, a dumpster's green), where it is 0 the baked colour is kept (tyres, glass, wood). */
+export function propMaterial(tint) {
+  const key = tint || 'none'; if (_propMats.has(key)) return _propMats.get(key);
+  const m = new THREE.MeshStandardMaterial({ color: tint || '#ffffff', vertexColors: true, roughness: 0.5, metalness: 0.02 });
+  m.userData.prop = true;
+  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#if defined( USE_COLOR_ALPHA )\n diffuseColor.rgb = mix( vColor.rgb, vColor.rgb * diffuseColor.rgb, vColor.a );\n#elif defined( USE_COLOR )\n diffuseColor.rgb *= vColor;\n#endif'); };
+  m.customProgramCacheKey = () => 'playset-prop';
+  _propMats.set(key, m); return m;
+}
+/** A generated unit or prop as a ready mesh (shared geometry), or null when models aren't loaded. */
+export function unitMesh(id, tint = null) {
+  const t = MODELS.props.get(id); if (!t) return null;
+  const m = new THREE.Mesh(t.geo, propMaterial(t.tint ? tint : null)); m.castShadow = true; m.receiveShadow = true; return m;
+}
 /** Where the generated dog's neck is: a slice just behind the head, in the dog's own space (1 m long, feet at y=0, nose +Z). */
 function dogCollar(scene) {
   scene.updateMatrixWorld(true); const v = new THREE.Vector3(); let zMax = -1e9, yMax = -1e9;

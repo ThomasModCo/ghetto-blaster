@@ -63,7 +63,7 @@ export class Projectiles {
       if (trig) { this.explode(c.pos, c.def.radius, c.def.damage, c.owner, c.def); m.scene.remove(c.mesh); this.placed.splice(i, 1); }
     }
     // decoys (fake gunfire)
-    for (let i = this.decoys.length - 1; i >= 0; i--) { const d = this.decoys[i]; d.t -= dt; d.shotT -= dt; if (d.shotT <= 0) { d.shotT = 0.1 + Math.random() * 0.5; m.audio('shot', null, d.pos, { kind: 'ar', vol: 0.7 }); m.fx.muzzle(d.pos.clone().add(new THREE.Vector3(0, 0.3, 0)), new THREE.Vector3(1, 0, 0), 'ar'); for (const b of m.bots) if (b.alive && !m.sameTeam(b, d.owner) && b.pos.distanceTo(d.pos) < d.def.radius * 2.5) b.hearShot(null, d.pos); } if (d.t <= 0) this.decoys.splice(i, 1); }
+    for (let i = this.decoys.length - 1; i >= 0; i--) { const d = this.decoys[i]; d.t -= dt; d.shotT -= dt; if (d.shotT <= 0) { d.shotT = 0.1 + Math.random() * 0.5; m.audio('shot', null, d.pos, { kind: 'ar', vol: 0.7 }); m.fx.muzzle(d.pos.clone().add(new THREE.Vector3(0, 0.3, 0)), new THREE.Vector3(1, 0, 0), 'ar'); for (const b of m.bots) if (b.alive && !m.sameTeam(b, d.owner) && b.pos.distanceTo(d.pos) < d.def.radius * 2.5) b.hearShot(null, d.pos); } if (d.t <= 0) { if (d.mesh) m.scene.remove(d.mesh); this.decoys.splice(i, 1); } }
     // fires (molotov)
     for (let i = this.fires.length - 1; i >= 0; i--) { const f = this.fires[i]; f.t -= dt; f.sparkT -= dt; if (f.sparkT <= 0) { f.sparkT = 0.05; for (let k = 0; k < 3; k++) m.fx.sparkTrail(f.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * f.r * 1.6, 0.1, (Math.random() - 0.5) * f.r * 1.6))); } for (const a of m.actors) { if (!a.alive) continue; if (a.pos.distanceTo(f.pos) < f.r && a.pos.y < f.pos.y + 1.5) { if (a.fx.burn <= 0.5) { a.fx.burn = 2.0; a.fx.burnFrom = f.owner; } } } if (f.t <= 0) { if (f.light) { f.light.life = 0; f.light.l.intensity = 0; } this.fires.splice(i, 1); } }
   }
@@ -94,5 +94,5 @@ export class Projectiles {
     for (let i = this.placed.length - 1; i >= 0; i--) if (this.placed[i].pos.distanceTo(at) < radius) { m.scene.remove(this.placed[i].mesh); this.placed.splice(i, 1); }
     m.onExplosion && m.onExplosion(at, owner);
   }
-  clear() { for (const p of this.list) this.m.scene.remove(p.mesh); for (const c of this.placed) this.m.scene.remove(c.mesh); for (const f of this.fires) if (f.light) { f.light.life = 0; f.light.l.intensity = 0; } this.list.length = 0; this.placed.length = 0; this.decoys.length = 0; this.fires.length = 0; }
+  clear() { for (const p of this.list) this.m.scene.remove(p.mesh); for (const c of this.placed) this.m.scene.remove(c.mesh); for (const f of this.fires) if (f.light) { f.light.life = 0; f.light.l.intensity = 0; } this.list.length = 0; this.placed.length = 0; for (const d of this.decoys) if (d.mesh) this.m.scene.remove(d.mesh); this.decoys.length = 0; this.fires.length = 0; }
 }

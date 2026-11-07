@@ -10,6 +10,7 @@ import { resolveLoadout, randomLoadout } from './loadouts.js';
 import { pickNames, FACTIONS } from './names.js';
 import { sfx } from '../audio/sfx.js';
 import { buildGunMesh, FFA_COLORS } from './character.js';
+import { unitMesh } from './models.js';
 
 const _v = new THREE.Vector3(), _r = new THREE.Vector3();
 const BITE = { id: 'bite', name: 'BITE', type: 'melee', slot: 'primary', damage: 55, rpm: 110, mag: 9999, reserve: 0, reload: 1, rangeFull: 2.2, rangeMin: 2.6, minDamage: 0, auto: true, pellets: 1, headshot: 1, adsTime: 0.1, adsFov: 70, speedMult: 1.5, adsSpeedMult: 1, spreadHip: 4, spreadAds: 4, spreadMove: 0, recoilV: 0, recoilH: 0, recoilRecover: 10, sound: 'none', suppressed: true, swapTime: 0.1, tracer: false, model: { len: 0.01, h: 0.01, barrel: 0, mag: 0, stock: 0, pistol: true, color: '#000' } };
@@ -155,7 +156,7 @@ export class Match {
       case 'juggernaut': p.maxHealth = 300; p.health = 300; p.fx.jugg = P.duration; break;
       case 'emp': this.emp = P.duration; for (const e of enemies()) { e.fx.flash = Math.max(e.fx.flash, 1.5); if (P.dark) e.fx.flash = 4; } break;
       case 'crew': for (let i = 0; i < P.count; i++) this.spawnCrew(p, P.skin || 'gang', P.duration, false); break;
-      case 'dog': for (let i = 0; i < (P.count || 1); i++) this.spawnCrew(p, 'dog', P.duration, true); break;
+      case 'dog': for (let i = 0; i < (P.count || 1); i++) this.spawnCrew(p, def.id === 'nola_gator' ? 'gator' : 'dog', P.duration, true); break;
       case 'turret': this.spawnSentry(p, P.duration); break;
       case 'mortar': this.mortars.push({ owner: p, t: P.duration, interval: P.interval, next: 0.5, fire: !!P.fire }); break;
       case 'driveby': this.driveBy(p, !!P.heavy); break;
@@ -163,15 +164,18 @@ export class Match {
       case 'hitman': this.timed.push({ owner: p, t: P.duration, interval: P.interval, next: 1.0, kind: 'hitman' }); break;
       case 'wipe': this.timed.push({ owner: p, t: P.delay || 0.8, kind: 'wipe' }); break;
       case 'quake': for (const e of enemies()) { e.fx.knock = Math.max(e.fx.knock, P.duration); } p.camShake = 1; this.quakeT = P.duration; sfx('bass'); if (P.fire) for (const e of enemies()) { e.fx.burn = 3; e.fx.burnFrom = p; } break;
-      case 'decoy': { p.computeAim(); this.projectiles.decoys.push({ pos: p.aimPoint.clone(), t: P.duration, shotT: 0, owner: p, def: { radius: 14 } }); break; }
+      case 'decoy': { p.computeAim(); const d = { pos: p.aimPoint.clone(), t: P.duration, shotT: 0, owner: p, def: { radius: 14 } };
+        const band = def.id === 'nola_brass' ? unitMesh('brass', p.model.plastic) : null; // the second line, molded in the caller's colour (visual only)
+        if (band) { const g = this.map.nav.nearestWalkable(d.pos.x, d.pos.z, 4, d.pos.y) || d.pos; band.position.set(g.x, g.y || 0, g.z); band.rotation.y = Math.atan2(p.pos.x - g.x, p.pos.z - g.z); this.scene.add(band); d.mesh = band; }
+        this.projectiles.decoys.push(d); break; }
       default: break;
     }
   }
   spawnCrew(owner, skin, duration, isDog) {
     const lo = isDog ? { primary: BITE, secondary: BITE, tactical: { id: 'none', name: '', count: 0, passive: true }, lethal: { id: 'none', name: '', count: 0, passive: true } } : resolveLoadout(randomLoadout(this.rng));
-    const b = new Bot(this, { name: isDog ? 'PITBULL' : (skin === 'cop' ? 'OFFICER' : skin === 'sicario' ? 'COLECTIVO' : 'HOMIE'), team: owner.team, faction: isDog ? 'dog' : skin, loadout: lo, rng: new RNG(this.rng.int(1, 1e9)), skill: isDog ? 0.9 : 0.75, persona: 'rusher', accent: owner.model.accent, plastic: owner.model.plastic });
+    const b = new Bot(this, { name: isDog ? (skin === 'gator' ? 'GATOR' : 'PITBULL') : (skin === 'cop' ? 'OFFICER' : skin === 'sicario' ? 'COLECTIVO' : 'HOMIE'), team: owner.team, faction: isDog ? 'dog' : skin, loadout: lo, rng: new RNG(this.rng.int(1, 1e9)), skill: isDog ? 0.9 : 0.75, persona: 'rusher', accent: owner.model.accent, plastic: owner.model.plastic });
     b.owner = owner; b.isCrew = true; b.isDog = isDog; b.ally = this.mode.teams ? null : owner; b.despawnT = duration; b.aggro = 1; b.level = 0; b.ping = 0;
-    if (isDog) b.model.makeDog();
+    if (isDog) b.model.makeDog(skin === 'gator');
     this.actors.push(b); this.bots.push(b); this.crew.push(b);
     const p = this.map.nav.randomPointNear(this.rng, owner.pos.x, owner.pos.z, 6, 12, owner.pos.y) || owner.pos;
     b.spawn({ x: p.x, y: p.y, z: p.z }, owner.body.yaw);
@@ -184,18 +188,29 @@ export class Match {
     this.actors.push(b); this.bots.push(b); this.crew.push(b);
     const fwd = owner.forward(new THREE.Vector3()); const p = this.map.nav.nearestWalkable(owner.pos.x + fwd.x * 1.5, owner.pos.z + fwd.z * 1.5, 3, owner.pos.y) || owner.pos;
     b.spawn({ x: p.x, y: p.y, z: p.z }, owner.body.yaw); b.body.wantCrouch = true;
+    const nest = unitMesh('nest'); if (nest) { nest.position.z = 0.5; nest.scale.setScalar(1.15); b.model.group.add(nest); } // sandbag nest, turns with the gunner (visual only)
   }
   driveBy(owner, heavy) {
     owner.computeAim(); const target = owner.aimPoint.clone(); const dir = target.clone().sub(owner.pos).setY(0).normalize();
     const start = owner.pos.clone().addScaledVector(dir, -10).setY(0); const end = owner.pos.clone().addScaledVector(dir, 70).setY(0);
-    const mesh = makeCarMesh(heavy ? '#1a1a1a' : '#8c1c1c'); this.scene.add(mesh);
+    const mesh = unitMesh(heavy ? 'lowrider' : 'driveby', owner.model.plastic) || makeCarMesh(heavy ? '#1a1a1a' : '#8c1c1c'); this.scene.add(mesh);
     this.cars.push({ owner, mesh, pos: start, dir, t: 0, dur: 4.5, end, heavy, shotT: 0 });
     sfx('engine');
   }
   spawnHeli(owner, duration) {
-    const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 7), new THREE.MeshStandardMaterial({ color: '#1a2a3a', roughness: 0.5 })); body.castShadow = true; g.add(body);
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 5), body.material); tail.position.set(0, 0.4, -5.5); g.add(tail);
-    const rotor = new THREE.Mesh(new THREE.BoxGeometry(12, 0.08, 0.5), new THREE.MeshStandardMaterial({ color: '#111' })); rotor.position.y = 1.2; g.add(rotor);
+    const g = new THREE.Group(); let rotor;
+    const toy = unitMesh('heli');
+    if (toy) { // generated police helicopter (molded without blades) + a spinning two-blade rotor on its mast
+      toy.geometry.computeBoundingBox(); const bb = toy.geometry.boundingBox; toy.position.y = -(bb.max.y - bb.min.y) * 0.45; g.add(toy);
+      rotor = new THREE.Group(); rotor.position.set((bb.min.x + bb.max.x) / 2, toy.position.y + bb.max.y + 0.05, (bb.min.z + bb.max.z) / 2 + (bb.max.z - bb.min.z) * 0.08);
+      const bm = new THREE.MeshStandardMaterial({ color: '#2a2d31', roughness: 0.45 }), span = (bb.max.z - bb.min.z) * 1.05;
+      for (const r of [0, Math.PI / 2]) { const b = new THREE.Mesh(new THREE.BoxGeometry(span, 0.06, 0.42), bm); b.rotation.y = r; rotor.add(b); }
+      g.add(rotor);
+    } else {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 7), new THREE.MeshStandardMaterial({ color: '#1a2a3a', roughness: 0.5 })); body.castShadow = true; g.add(body);
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 5), body.material); tail.position.set(0, 0.4, -5.5); g.add(tail);
+      rotor = new THREE.Mesh(new THREE.BoxGeometry(12, 0.08, 0.5), new THREE.MeshStandardMaterial({ color: '#111' })); rotor.position.y = 1.2; g.add(rotor);
+    }
     this.scene.add(g); this.fx.spot.intensity = 300; this.heli = { owner, mesh: g, rotor, t: duration, ang: 0, shotT: 0, soundT: 0 }; sfx('heli');
   }
   // ---------------- update ----------------

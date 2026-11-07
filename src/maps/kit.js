@@ -65,6 +65,18 @@ export function chamferBox(w, h, d, c = 0.05) {
   return geo;
 }
 
+/** Split a grouped, non-indexed geometry into one geometry per list of group indices (e.g. walls vs roof). */
+export function splitGroups(geo, sets) {
+  return sets.map((ids) => {
+    const parts = geo.groups.filter((g) => ids.includes(g.materialIndex)), out = new THREE.BufferGeometry();
+    for (const [name, a] of Object.entries(geo.attributes)) {
+      const n = a.itemSize, arr = new Float32Array(parts.reduce((t, g) => t + g.count, 0) * n); let o = 0;
+      for (const g of parts) { arr.set(a.array.subarray(g.start * n, (g.start + g.count) * n), o); o += g.count * n; }
+      out.setAttribute(name, new THREE.BufferAttribute(arr, n));
+    }
+    return out;
+  });
+}
 /** Scale the UVs of one or more face groups (same signature as the old BoxGeometry helper: per-face [su, sv] or null). */
 export function scaleFaceUVs(geo, ...faces) {
   const uv = geo.attributes.uv, idx = geo.index;
@@ -88,10 +100,9 @@ export function trimColor(wall, style) {
 let FRAME = null;
 export function windowFrameGeo() {
   if (FRAME) return FRAME;
-  const part = (w, h, d, x, y, z, c) => chamferBox(w, h, d, c).translate(x, y, z);
-  // the sill catches the light, so it alone is chamfered; head and jambs are plain boxes (80 triangles total)
+  // plain boxes (48 triangles): there are thousands of these per map, and at window scale a chamfer doesn't read
   const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed();
-  const parts = [part(1.34, 0.12, 0.2, 0, -0.56, 0.1, 0.03), box(1.24, 0.11, 0.12, 0, 0.555, 0.06), box(0.09, 1.0, 0.07, -0.545, 0, 0.035), box(0.09, 1.0, 0.07, 0.545, 0, 0.035)];
+  const parts = [box(1.34, 0.12, 0.2, 0, -0.56, 0.1), box(1.24, 0.11, 0.12, 0, 0.555, 0.06), box(0.09, 1.0, 0.07, -0.545, 0, 0.035), box(0.09, 1.0, 0.07, 0.545, 0, 0.035)];
   for (const p of parts) p.clearGroups();
   FRAME = mergeGeometries(parts, false);
   return FRAME;

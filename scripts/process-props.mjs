@@ -21,28 +21,35 @@ const OUT = process.argv[3] || 'public/models'; fs.mkdirSync(OUT, { recursive: t
 // long: 'z' | 'x' (axis the longest horizontal side should lie on); yaw: extra turn after orienting (radians);
 // tris: decimation budget; tint: grey body is normalised to white for per-placement colour.
 export const PROPS = {
-  car: { size: [1.9, 1.65, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 2600, tint: true },
-  van: { size: [2.1, 2.2, 5.2], fit: 'xyz', exact: true, long: 'z', tris: 2600, tint: true },
-  truck: { size: [2.4, 3.2, 7.65], fit: 'xyz', exact: true, long: 'z', tris: 3000, tint: true },
-  bus: { size: [2.6, 3.4, 11], fit: 'xyz', exact: true, long: 'z', tris: 3400, tint: true },
-  container: { size: [6, 2.6, 2.4], fit: 'xyz', exact: true, long: 'x', tris: 900, tint: true },
-  dumpster: { size: [2.0, 1.5, 1.3], fit: 'xyz', exact: true, long: 'x', tris: 1500, tint: true },
-  phonebooth: { size: [0.9, 2.4, 0.9], fit: 'y', long: null, tris: 1000, tint: true },
-  busstop: { size: [3.6, 2.7, 1.6], fit: 'x', long: 'x', tris: 1500, gain: 0.55 },
-  newsstand: { size: [2.8, 2.6, 1.9], fit: 'xyz', exact: true, long: 'x', tris: 1500, tint: true },
-  stall: { size: [3.4, 2.5, 1.9], fit: 'x', long: 'x', tris: 2000, tint: true },
-  tires: { size: [1.1, 1.3, 1.1], fit: 'y', long: null, tris: 1400, gain: 0.32 },
-  trafficlight: { size: [0.6, 5.6, 4.0], fit: 'y', cap: 0, long: 'z', tris: 1000, anchor: 'base', arm: true, gain: 0.5 },
-  trashcan: { size: [0.75, 1.05, 0.75], fit: 'y', long: null, tris: 800, gain: 0.62 },
-  barrel: { size: [0.66, 0.92, 0.66], fit: 'y', long: null, tris: 600, tint: true },
-  crate: { size: [1, 1, 1], fit: 'xyz', exact: true, long: null, tris: 600 },
-  bench: { size: [1.8, 0.95, 0.8], fit: 'x', cap: 1.6, long: 'x', tris: 1200 },
-  lamp: { size: [0.5, 6.2, 1.9], fit: 'y', cap: 0, long: 'z', tris: 700, anchor: 'base', arm: true, gain: 0.5 },
-  hydrant: { size: [0.6, 1.0, 0.6], fit: 'y', cap: 0, long: null, tris: 800, gain: 0.75 },
-  tree: { size: [3.2, 5.4, 3.2], fit: 'y', cap: 0, long: null, tris: 2000, anchor: 'base', gain: 0.72, sat: 0.55 },
-  palm: { size: [3.5, 9.0, 3.5], fit: 'y', cap: 0, long: null, tris: 1500, anchor: 'base', gain: 0.75 },
-  cone: { size: [0.5, 0.7, 0.5], fit: 'y', long: null, tris: 300 },
-  trashpile: { size: [1.9, 1.0, 1.9], fit: 'xz', cap: 1.6, long: null, tris: 1200 },
+  car: { size: [1.9, 1.65, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true },
+  van: { size: [2.1, 2.2, 5.2], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true },
+  truck: { size: [2.4, 3.2, 7.65], fit: 'xyz', exact: true, long: 'z', tris: 1900, tint: true },
+  bus: { size: [2.6, 3.4, 11], fit: 'xyz', exact: true, long: 'z', tris: 2200, tint: true },
+  container: { size: [6, 2.6, 2.4], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true },
+  dumpster: { size: [2.0, 1.5, 1.3], fit: 'xyz', exact: true, long: 'x', tris: 1000, tint: true },
+  phonebooth: { size: [0.9, 2.4, 0.9], fit: 'y', long: null, tris: 800, tint: true, greyBody: true },
+  busstop: { size: [3.6, 2.7, 1.6], fit: 'x', long: 'x', tris: 1000, gain: 0.55 },
+  newsstand: { size: [2.8, 2.6, 1.9], fit: 'xyz', exact: true, long: 'x', tris: 1000, tint: true },
+  stall: { size: [3.4, 2.5, 1.9], fit: 'x', long: 'x', tris: 1300, tint: true },
+  tires: { size: [1.1, 1.3, 1.1], fit: 'y', long: null, tris: 900, gain: 0.32 },
+  trafficlight: { size: [0.6, 5.6, 4.0], fit: 'y', cap: 0, long: 'z', tris: 800, anchor: 'base', arm: true, gain: 0.5 },
+  trashcan: { size: [0.75, 1.05, 0.75], fit: 'y', long: null, tris: 600, gain: 0.62 },
+  barrel: { size: [0.66, 0.92, 0.66], fit: 'y', long: null, tris: 450, tint: true },
+  crate: { size: [1, 1, 1], fit: 'xyz', exact: true, long: null, tris: 450 },
+  bench: { size: [1.8, 0.95, 0.8], fit: 'x', cap: 1.6, long: 'x', tris: 800 },
+  lamp: { size: [0.5, 6.2, 1.9], fit: 'y', cap: 0, long: 'z', tris: 600, anchor: 'base', arm: true, gain: 0.5 },
+  hydrant: { size: [0.6, 1.0, 0.6], fit: 'y', cap: 0, long: null, tris: 600, gain: 0.75 },
+  tree: { size: [3.2, 5.4, 3.2], fit: 'y', cap: 0, long: null, tris: 1200, anchor: 'base', gain: 0.72, sat: 0.55 },
+  palm: { size: [3.5, 9.0, 3.5], fit: 'y', cap: 0, long: null, tris: 1000, anchor: 'base', gain: 0.75 },
+  cone: { size: [0.5, 0.7, 0.5], fit: 'y', long: null, tris: 250 },
+  trashpile: { size: [1.9, 1.0, 1.9], fit: 'xz', cap: 1.6, long: null, tris: 800 },
+  // streak units (not map props: spawned by match.js; same pipeline)
+  heli: { size: [2.6, 3.2, 10], fit: 'z', cap: 0, long: 'z', tris: 2600, thickFront: true, gain: 0.5 },
+  lowrider: { size: [2.0, 1.35, 5.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true },
+  driveby: { size: [1.9, 1.75, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true },
+  nest: { size: [2.4, 1.0, 2.2], fit: 'xz', cap: 1.6, long: 'x', tris: 1600, yaw: 180, darkGreys: 0.35 },
+  gator: { size: [0.9, 0.5, 2.3], fit: 'z', cap: 0, long: 'z', tris: 1800, thickFront: true, yaw: 180, gain: 0.55, sat: 0.8 },
+  brass: { size: [1.7, 1.9, 0.9], fit: 'y', cap: 1.6, long: 'x', tris: 2400, tint: true, greyBody: true },
 };
 const YAW = JSON.parse(process.env.YAW || '{}'); // per-prop extra turn in degrees, decided by looking at renders
 
@@ -116,7 +123,12 @@ for (const f of fs.readdirSync(RAW).filter((x) => x.endsWith('.glb'))) {
   let b = bbox(doc);
   if (P.long === 'z' && b.sz[0] > b.sz[2]) apply(doc, M.rotY(Math.PI / 2));
   if (P.long === 'x' && b.sz[2] > b.sz[0]) apply(doc, M.rotY(Math.PI / 2));
-  if (YAW[id]) apply(doc, M.rotY((YAW[id] * Math.PI) / 180));
+  if (P.thickFront) { // the bulkier end (cabin, head) goes to +Z, the thin end (tail) to -Z
+    const bb = bbox(doc), L = bb.sz[2], v = [], ext = (lo, hi) => { let mn = 1e9, mx = -1e9; for (const p of prims(doc)) { const a = p.getAttribute('POSITION'); for (let i = 0; i < a.getCount(); i++) { a.getElement(i, v); if (v[2] >= lo && v[2] <= hi) { mn = Math.min(mn, v[1]); mx = Math.max(mx, v[1]); } } } return mx - mn; };
+    if (ext(bb.mx[2] - L * 0.15, bb.mx[2]) < ext(bb.mn[2], bb.mn[2] + L * 0.15)) apply(doc, M.rotY(Math.PI));
+  }
+  const yaw = (P.yaw || 0) + (YAW[id] || 0); // manual turn, decided by looking at renders
+  if (yaw) apply(doc, M.rotY((yaw * Math.PI) / 180));
   b = bbox(doc);
   // fit: uniform scale so the listed axes reach the target, never exceeding any other target axis by > 25%
   // exact: stretch each axis onto the collider box (vehicles, crates); otherwise uniform, fitting the listed axes and
@@ -136,6 +148,10 @@ for (const f of fs.readdirSync(RAW).filter((x) => x.endsWith('.glb'))) {
     if (P.arm && cen(0.75, 1)[1] < cen(0, 0.15)[1]) apply(doc, M.rotY(Math.PI));
     if (P.anchor === 'base') { const [bx, bz] = cen(0, 0.12); apply(doc, M.scaleT(1, 1, 1, -bx, 0, -bz)); }
   }
+  // greyBody: the source frame came out beige rather than grey; flatten light, mildly saturated colours to grey first
+  if (P.greyBody) for (const p of prims(doc)) { const a = p.getAttribute('COLOR_0'); const c = a.getArray(); for (let i = 0; i < c.length; i += 4) { const mx = Math.max(c[i], c[i + 1], c[i + 2]), mn = Math.min(c[i], c[i + 1], c[i + 2]); if (mx > 0.15 && (mx - mn) / mx < 0.55) { const l = 0.2126 * c[i] + 0.7152 * c[i + 1] + 0.0722 * c[i + 2]; c[i] = c[i + 1] = c[i + 2] = l; } } a.setArray(c); }
+  // darkGreys: the baked charcoal parts (a mounted gun) came out light grey; darken neutral colours, leave tan/green alone
+  if (P.darkGreys) for (const p of prims(doc)) { const a = p.getAttribute('COLOR_0'); const c = a.getArray(); for (let i = 0; i < c.length; i += 4) { const mx = Math.max(c[i], c[i + 1], c[i + 2]), mn = Math.min(c[i], c[i + 1], c[i + 2]); if (mx > 0 && (mx - mn) / mx < 0.15) for (let k = 0; k < 3; k++) c[i + k] *= P.darkGreys; } a.setArray(c); }
   const body = P.tint ? whitenBody(doc) : null;
   // alpha = tint mask: 1 on the neutral, light molded body (takes the per-placement colour), 0 on tyres, glass, wood, fruit
   for (const p of prims(doc)) {
@@ -145,7 +161,7 @@ for (const f of fs.readdirSync(RAW).filter((x) => x.endsWith('.glb'))) {
       if (P.sat !== undefined) { const l = 0.2126 * c[i] + 0.7152 * c[i + 1] + 0.0722 * c[i + 2]; for (let k = 0; k < 3; k++) c[i + k] = l + (c[i + k] - l) * P.sat; }
       const mx = Math.max(c[i], c[i + 1], c[i + 2]), mn = Math.min(c[i], c[i + 1], c[i + 2]), sat = mx > 0 ? (mx - mn) / mx : 0;
       const ss = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
-      c[i + 3] = P.tint ? ss(0.1, 0.22, mx) * (1 - ss(0.14, 0.32, sat)) : 0;
+      c[i + 3] = P.tint && ss(0.1, 0.22, mx) * (1 - ss(0.14, 0.32, sat)) > 0.5 ? 1 : 0; // hard mask: soft edges smear pale streaks across big panels
     }
     a.setArray(c);
   }
