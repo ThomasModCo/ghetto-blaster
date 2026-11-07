@@ -191,3 +191,73 @@ export function normalFromHeight(hc, strength = 3) {
   }
   octx.putImageData(img, 0, 0); return out;
 }
+
+// ---------------- ground (model-railroad scenics) ----------------
+// Ground textures repeat many times across the board, so anything larger than a speck is drawn with wrap-around
+// (`wrap`) to keep the tiling seamless.
+function wrap(W, H, x, y, r, draw) { for (const ox of [-W, 0, W]) for (const oy of [-H, 0, H]) if (x + ox > -r && x + ox < W + r && y + oy > -r && y + oy < H + r) draw(x + ox, y + oy); }
+function wrapMottle(ctx, W, H, rng, n, a, rMin = 0.1, rMax = 0.3) {
+  for (let i = 0; i < n; i++) {
+    const x = rng.float(0, W), y = rng.float(0, H), r = rng.float(W * rMin, W * rMax), light = rng.chance(0.5);
+    wrap(W, H, x, y, r, (px, py) => { const g = ctx.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, light ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(px - r, py - r, r * 2, r * 2); });
+  }
+}
+function setup(S, base) { const c = canvas(S, S), ctx = c.getContext('2d'), hc = canvas(S, S), hx = hc.getContext('2d'); const k = S / 256; ctx.scale(k, k); hx.scale(k, k); ctx.fillStyle = base; ctx.fillRect(0, 0, 256, 256); hx.fillStyle = grey(128); hx.fillRect(0, 0, 256, 256); return { c, ctx, hc, hx }; }
+
+/** Painted model road: smooth dark paint, fine aggregate and faint hairline cracks. */
+export function paintAsphalt({ seed = 4, color = '#3c3c42' } = {}, S = 256) {
+  const { c, ctx, hc, hx } = setup(S, color), rng = new RNG(seed), W = 256;
+  wrapMottle(ctx, W, W, rng, 5, 0.025, 0.25, 0.45); stipple(ctx, W, W, rng, 2600, 0.06);
+  // no repair patches or other distinctive marks: this tile repeats every 4 m, and anything recognisable reads as a grid
+  for (let i = 0; i < 3; i++) { // hairline cracks
+    let x = rng.float(0, W), y = rng.float(0, W); const pts = [[x, y]]; for (let k = 0; k < 7; k++) { x += rng.float(-14, 14); y += rng.float(-14, 14); pts.push([x, y]); }
+    wrap(W, W, pts[0][0], pts[0][1], 110, (px, py) => { const dx = px - pts[0][0], dy = py - pts[0][1];
+      for (const [col, off, ctxx] of [['rgba(255,255,255,0.05)', 0.8, ctx], ['rgba(0,0,0,0.2)', 0, ctx], [grey(95), 0, hx]]) { ctxx.strokeStyle = col; ctxx.lineWidth = 1.2; ctxx.beginPath(); pts.forEach(([a, b], j) => (j ? ctxx.lineTo : ctxx.moveTo).call(ctxx, a + dx + off, b + dy + off)); ctxx.stroke(); } });
+  }
+  return { c, hc, repeat: [8, 8] };
+}
+/** Molded paving slabs, each a touch different in tone, gaps washed dark, the odd cracked slab. */
+export function paintSidewalk({ seed = 5, color = '#9a9890' } = {}, S = 256) {
+  const { c, ctx, hc, hx } = setup(S, shade(color, -0.22)), rng = new RNG(seed);
+  hx.fillStyle = grey(70); hx.fillRect(0, 0, 256, 256);
+  for (let y = 0; y < 256; y += 64) for (let x = 0; x < 256; x += 64) {
+    const col = C(color).offsetHSL(0, rng.float(-0.02, 0.02), rng.float(-0.04, 0.04)).getStyle();
+    molded(ctx, hx, x + 1.5, y + 1.5, 61, 61, col, { edge: 1.5, hi: 0.06, lo: -0.08, height: 170 });
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 3, y + 3, 57, 57); ctx.clip(); stipple(ctx, 256, 256, rng, 120, 0.05); ctx.restore();
+    if (rng.chance(0.12)) { ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + rng.float(4, 60), y + 2); ctx.lineTo(x + rng.float(20, 44), y + 32); ctx.lineTo(x + rng.float(4, 60), y + 62); ctx.stroke(); }
+  }
+  return { c, hc, repeat: [4, 4] };
+}
+/** Scenic earth: mottled brown base, fine ballast-style gravel, small static-grass tufts. */
+export function paintDirt({ seed = 6, color = '#6b5a3e' } = {}, S = 256) {
+  const { c, ctx, hc, hx } = setup(S, color), rng = new RNG(seed), W = 256;
+  wrapMottle(ctx, W, W, rng, 10, 0.07, 0.08, 0.22); stipple(ctx, W, W, rng, 1800, 0.06);
+  for (let i = 0; i < 900; i++) { // gravel: tiny raised stones toned to the earth, with a faint lit top
+    const x = rng.float(0, W), y = rng.float(0, W), r = rng.float(0.5, 1.3), v = rng.float(-0.1, 0.1);
+    ctx.fillStyle = shade(color, v, -0.15); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.45, 0, 7); ctx.fill();
+    hx.fillStyle = grey(180); hx.beginPath(); hx.arc(x, y, r, 0, 7); hx.fill();
+  }
+  for (let i = 0; i < 9; i++) { // static-grass tufts
+    const x = rng.float(0, W), y = rng.float(0, W), n = rng.int(14, 30), g = rng.pick(['#6f7f3a', '#5f7234', '#8a8a45']);
+    wrap(W, W, x, y, 12, (px, py) => { for (let k = 0; k < n; k++) { const a = rng.float(0, 6.28), d = rng.float(0, 7); ctx.fillStyle = shade(g, rng.float(-0.08, 0.1)); ctx.fillRect(px + Math.cos(a) * d, py + Math.sin(a) * d, 1.6, 1.6); } });
+  }
+  return { c, hc, repeat: [6, 6] };
+}
+/** Flocked turf: short fibres in close greens with gentle clumping (no worn patches: they repeat visibly). */
+export function paintGrass({ seed = 7, color = '#4f6b2e' } = {}, S = 256) {
+  const { c, ctx, hc, hx } = setup(S, color), rng = new RNG(seed), W = 256;
+  wrapMottle(ctx, W, W, rng, 12, 0.08, 0.06, 0.18);
+  const greens = [0, 0.03, -0.03, 0.06, -0.045].map((v) => shade(color, v, rng.float(-0.03, 0.05)));
+  for (let i = 0; i < 5200; i++) { const x = rng.float(0, W), y = rng.float(0, W), l = rng.float(1.5, 3.5); ctx.fillStyle = greens[i % greens.length]; ctx.fillRect(x, y, 1, l); hx.fillStyle = grey(rng.int(130, 190)); hx.fillRect(x, y, 1, l); }
+  return { c, hc, repeat: [6, 6] };
+}
+/** Rounded molded cobbles in staggered rows, dark wash in the joints. */
+export function paintCobble({ seed = 8, color = '#6f6a63' } = {}, S = 256) {
+  const { c, ctx, hc, hx } = setup(S, shade(color, -0.3)), rng = new RNG(seed);
+  hx.fillStyle = grey(60); hx.fillRect(0, 0, 256, 256);
+  for (let y = 0, row = 0; y < 256; y += 16, row++) for (let x = -8; x < 256; x += 16) {
+    const col = C(color).offsetHSL(0, rng.float(-0.03, 0.03), rng.float(-0.07, 0.07)).getStyle(), ox = (row % 2) * 8;
+    molded(ctx, hx, x + ox + 1.2, y + 1.2, 13.6, 13.6, col, { edge: 1.5, hi: 0.1, lo: -0.12, height: 190, r: 4.5 });
+  }
+  return { c, hc, repeat: [6, 6] };
+}

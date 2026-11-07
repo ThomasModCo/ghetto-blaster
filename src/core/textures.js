@@ -1,7 +1,7 @@
 // Procedural canvas textures so the game ships with zero image assets.
 import * as THREE from 'three';
 import { RNG } from './rng.js';
-import { paintFacade, paintBrick, paintConcrete, paintPlaster, paintCorrugated, paintMetal, paintTile, normalFromHeight } from './minipaint.js';
+import { paintFacade, paintBrick, paintConcrete, paintPlaster, paintCorrugated, paintMetal, paintTile, paintAsphalt, paintSidewalk, paintDirt, paintGrass, paintCobble, normalFromHeight } from './minipaint.js';
 
 const cache = new Map();
 
@@ -22,14 +22,6 @@ function noise(ctx, w, h, rng, amount = 0.08, count = 4000) {
     ctx.fillRect(rng.float(0, w), rng.float(0, h), rng.float(1, 4), rng.float(1, 4));
   }
 }
-function grime(ctx, w, h, rng, n = 12) {
-  for (let i = 0; i < n; i++) {
-    const g = ctx.createRadialGradient(rng.float(0, w), rng.float(0, h), 0, rng.float(0, w), rng.float(0, h), rng.float(w * 0.1, w * 0.4));
-    g.addColorStop(0, `rgba(0,0,0,${rng.float(0.05, 0.25)})`);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-  }
-}
 
 // Random seeds are quantised to a few variants per texture type so that props share materials and batch into few draw calls.
 const SEED_VARIANTS = { brick: 4, concrete: 4, plaster: 4, asphalt: 2, sidewalk: 2, dirt: 2, grass: 2, cobble: 2, tile: 3, metal: 3, corrugated: 4, facade: 4, graffiti: 3, cloth: 3, water: 1 };
@@ -41,7 +33,8 @@ const normalCache = new Map(), normalOfMap = new WeakMap();
 export function normalFor(map) { return normalOfMap.get(map) || null; }
 // colour-only params: they never change a texture's relief, so buildings that differ only in paint share a normal map
 const PAINT_KEYS = new Set(['color', 'wall', 'winColor', 'trim', 'lit', 'mortar', 'line', 'rust', 'frame']);
-const MINI = { facade: [paintFacade, 512, 2.5], brick: [paintBrick, 256, 2.5], concrete: [paintConcrete, 256, 2], plaster: [paintPlaster, 256, 2], corrugated: [paintCorrugated, 256, 3], metal: [paintMetal, 128, 2], tile: [paintTile, 256, 2] };
+const MINI = { facade: [paintFacade, 512, 2.5], brick: [paintBrick, 256, 2.5], concrete: [paintConcrete, 256, 2], plaster: [paintPlaster, 256, 2], corrugated: [paintCorrugated, 256, 3], metal: [paintMetal, 128, 2], tile: [paintTile, 256, 2],
+  asphalt: [paintAsphalt, 256, 1.6], sidewalk: [paintSidewalk, 256, 2], dirt: [paintDirt, 256, 1.6], grass: [paintGrass, 256, 1.2], cobble: [paintCobble, 256, 2.5] };
 export function tex(name, params = {}) {
   if (params.seed !== undefined && SEED_VARIANTS[name]) params = { ...params, seed: ((Math.abs(Math.floor(params.seed)) - 1) % SEED_VARIANTS[name]) + 1 };
   const key = name + JSON.stringify(params) + (MINI[name] ? DETAIL : '');
@@ -61,48 +54,6 @@ export function tex(name, params = {}) {
 }
 
 const GEN = {
-  asphalt({ seed = 4, color = '#3c3c42' } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    noise(ctx, w, h, rng, 0.14, 9000);
-    for (let i = 0; i < 4; i++) { ctx.strokeStyle = `rgba(0,0,0,${rng.float(0.2, 0.4)})`; ctx.lineWidth = rng.float(1, 2); ctx.beginPath(); let x = rng.float(0, w), y = rng.float(0, h); ctx.moveTo(x, y); for (let k = 0; k < 6; k++) { x += rng.float(-30, 30); y += rng.float(-30, 30); ctx.lineTo(x, y); } ctx.stroke(); }
-    grime(ctx, w, h, rng, 8);
-    return finish(c, [8, 8]);
-  },
-  sidewalk({ seed = 5, color = '#9a9890' } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    noise(ctx, w, h, rng, 0.1, 5000);
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
-    for (let x = 0; x <= w; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-    for (let y = 0; y <= h; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-    grime(ctx, w, h, rng, 6);
-    return finish(c, [4, 4]);
-  },
-  dirt({ seed = 6, color = '#6b5a3e' } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    noise(ctx, w, h, rng, 0.15, 9000); grime(ctx, w, h, rng, 10);
-    for (let i = 0; i < 200; i++) { ctx.fillStyle = `rgba(80,110,40,${rng.float(0.1, 0.4)})`; ctx.fillRect(rng.float(0, w), rng.float(0, h), rng.float(2, 6), rng.float(2, 6)); }
-    return finish(c, [6, 6]);
-  },
-  grass({ seed = 7, color = '#4f6b2e' } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 3000; i++) { ctx.fillStyle = `rgba(${rng.int(40, 120)},${rng.int(90, 150)},${rng.int(20, 60)},0.6)`; ctx.fillRect(rng.float(0, w), rng.float(0, h), 2, rng.float(2, 6)); }
-    grime(ctx, w, h, rng, 6);
-    return finish(c, [6, 6]);
-  },
-  cobble({ seed = 8, color = '#6f6a63' } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = '#3b3833'; ctx.fillRect(0, 0, w, h);
-    for (let y = 0; y < h; y += 16) for (let x = 0; x < w; x += 16) {
-      const col = new THREE.Color(color); col.offsetHSL(0, 0, rng.float(-0.08, 0.08));
-      ctx.fillStyle = col.getStyle(); ctx.beginPath(); ctx.roundRect(x + 1 + ((y / 16) % 2) * 8, y + 1, 14, 14, 4); ctx.fill();
-    }
-    noise(ctx, w, h, rng, 0.1, 4000); grime(ctx, w, h, rng, 8);
-    return finish(c, [6, 6]);
-  },
   graffiti({ seed = 13, base = '#777', text = 'GB' } = {}) {
     const w = 256, h = 128, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
     ctx.clearRect(0, 0, w, h);

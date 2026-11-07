@@ -29,6 +29,13 @@ function repeatMaterial(material, repeat) {
   if (!mm) { mm = material.clone(); mm.map = material.map.clone(); mm.map.repeat.set(rx, ry); mm.map.needsUpdate = true; if (material.normalMap) { mm.normalMap = material.normalMap.clone(); mm.normalMap.repeat.set(rx, ry); mm.normalMap.needsUpdate = true; } mm.userData = { ...material.userData }; repeatCache.set(key, mm); }
   return mm;
 }
+/** Ground material tiled `rx` x `ry` times, with the texture's shared normal map tiled to match (miniature scenics). */
+function tiledMaterial(name, params, rx, ry, extra = {}) {
+  const src = tex(name, params), t = src.clone(); t.repeat.set(rx, ry); t.needsUpdate = true;
+  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.88, metalness: 0, ...extra });
+  const n = normalFor(src); if (n) { m.normalMap = n.clone(); m.normalMap.repeat.set(rx, ry); m.normalMap.needsUpdate = true; m.normalScale.set(0.8, 0.8); }
+  return m;
+}
 const KIT_WINDOW_MAX_Y = 13; // 3D window surrounds only up to ~4 floors
 
 
@@ -71,15 +78,13 @@ export class MapBuilder {
   }
   // flat textured plane on the ground (no collider)
   patch(x, z, w, d, texName, params = {}, y = 0.015, rot = 0) {
-    const t = tex(texName, params).clone(); t.repeat.set(w / (params.scale || 6), d / (params.scale || 6)); t.needsUpdate = true;
-    const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.95, metalness: 0 });
+    const m = tiledMaterial(texName, params, w / (params.scale || 6), d / (params.scale || 6));
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); mesh.rotation.x = -Math.PI / 2; mesh.rotation.z = rot; mesh.position.set(x, y, z); mesh.receiveShadow = true; this.group.add(mesh);
     this.patches.push({ x, z, w, d, rot, color: params.mmColor || null });
     return mesh;
   }
   ground(texName = 'asphalt', params = {}) {
-    const t = tex(texName, params).clone(); t.repeat.set(this.size / 4, this.size / 4); t.needsUpdate = true;
-    const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 });
+    const m = tiledMaterial(texName, params, this.size / 4, this.size / 4);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(this.size, this.size), m); mesh.rotation.x = -Math.PI / 2; mesh.receiveShadow = true; this.group.add(mesh);
     // outer bounds walls (invisible)
     const s = this.size / 2, H = 30;
@@ -99,8 +104,7 @@ export class MapBuilder {
   road(x1, z1, x2, z2, width = 10, { marks = true, sidewalk = true, sidewalkW = 2.2, dashed = true, y = 0.02 } = {}) {
     const dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz), ang = Math.atan2(dx, dz);
     const cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
-    const t = tex('asphalt', { seed: 4 }).clone(); t.repeat.set(width / 6, len / 6); t.needsUpdate = true;
-    const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 });
+    const m = tiledMaterial('asphalt', { seed: 4 }, width / 6, len / 6);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, len), m); mesh.rotation.order = 'YXZ'; mesh.rotation.y = ang; mesh.rotation.x = -Math.PI / 2; mesh.position.set(cx, y, cz); mesh.receiveShadow = true; this.group.add(mesh);
     if (marks) {
       const mt = tex('roadMarks', { dashed }).clone(); mt.repeat.set(1, len / 8); mt.needsUpdate = true;
@@ -108,8 +112,7 @@ export class MapBuilder {
       mm.rotation.order = 'YXZ'; mm.rotation.y = ang; mm.rotation.x = -Math.PI / 2; mm.position.set(cx, y + 0.012, cz); this.group.add(mm);
     }
     if (sidewalk) {
-      const st = tex('sidewalk').clone(); st.repeat.set(sidewalkW / 4, len / 4); st.needsUpdate = true;
-      const sm = new THREE.MeshStandardMaterial({ map: st, roughness: 0.95 });
+      const sm = tiledMaterial('sidewalk', {}, sidewalkW / 4, len / 4);
       const nx = Math.cos(ang), nz = -Math.sin(ang);
       for (const side of [-1, 1]) {
         const off = (width / 2 + sidewalkW / 2) * side;
