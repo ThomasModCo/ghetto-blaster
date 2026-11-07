@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { World, Box } from '../core/physics.js';
 import { NavGrid } from './nav.js';
-import { tex } from '../core/textures.js';
+import { tex, normalFor } from '../core/textures.js';
 import { RNG } from '../core/rng.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { chamferBox, scaleFaceUVs, splitGroups, trimColor, windowFrameGeo, facadeWindows } from './kit.js';
@@ -16,7 +16,7 @@ export function mat(name, params = {}, extra = {}) {
   let m;
   // playset: everything is cast or molded, so nothing is fully matte (caps roughness for a soft sheen)
   if (name === 'color') m = new THREE.MeshStandardMaterial({ color: new THREE.Color(params.color || '#888'), roughness: Math.min(0.72, params.rough ?? 0.85), metalness: params.metal ?? 0.05, ...extra });
-  else m = new THREE.MeshStandardMaterial({ map: tex(name, params), roughness: Math.min(0.78, params.rough ?? 0.9), metalness: params.metal ?? 0.02, ...extra });
+  else { const map = tex(name, params); m = new THREE.MeshStandardMaterial({ map, roughness: Math.min(0.78, params.rough ?? 0.9), metalness: params.metal ?? 0.02, ...extra }); const nm = normalFor(map); if (nm) { m.normalMap = nm; m.normalScale.set(0.9, 0.9); } }
   m.userData.params = params; matCache.set(key, m); return m;
 }
 const col = (c, r = 0.85, mt = 0.05) => mat('color', { color: c, rough: r, metal: mt });
@@ -26,7 +26,7 @@ const repeatCache = new Map();
 function repeatMaterial(material, repeat) {
   const rx = Math.max(0.25, Math.round(repeat[0] * 4) / 4), ry = Math.max(0.25, Math.round(repeat[1] * 4) / 4), key = material.uuid + '|' + rx + '|' + ry;
   let mm = repeatCache.get(key);
-  if (!mm) { mm = material.clone(); mm.map = material.map.clone(); mm.map.repeat.set(rx, ry); mm.map.needsUpdate = true; mm.userData = { ...material.userData }; repeatCache.set(key, mm); }
+  if (!mm) { mm = material.clone(); mm.map = material.map.clone(); mm.map.repeat.set(rx, ry); mm.map.needsUpdate = true; if (material.normalMap) { mm.normalMap = material.normalMap.clone(); mm.normalMap.repeat.set(rx, ry); mm.normalMap.needsUpdate = true; } mm.userData = { ...material.userData }; repeatCache.set(key, mm); }
   return mm;
 }
 const KIT_WINDOW_MAX_Y = 13; // 3D window surrounds only up to ~4 floors
@@ -130,7 +130,7 @@ export class MapBuilder {
     const wall = color || rng.pick(palette[style] || palette.concrete);
     const fstyle = style === 'brick' || style === 'tenement' ? 'brick' : style === 'glass' ? 'glass' : 'plain';
     // facade materials are shared across buildings (a handful of seeds per look) so merged geometry batches well
-    const fm = mat('facade', { seed: 1 + (rng.int(1, 9999) % 5), wall, style: fstyle, cols: 3, rows: 2, lit, winColor, balcony: balcony || style === 'tenement', shutters, ac: style !== 'glass' }, { roughness: style === 'glass' ? 0.35 : 0.9, metalness: style === 'glass' ? 0.3 : 0.02 });
+    const fm = mat('facade', { seed: 1 + (rng.int(1, 9999) % 5), wall, style: fstyle, cols: 3, rows: 2, lit, winColor, trim: '#' + trimColor(wall, style).getHexString(), balcony: balcony || style === 'tenement', shutters, ac: style !== 'glass' }, { roughness: style === 'glass' ? 0.35 : 0.9, metalness: style === 'glass' ? 0.3 : 0.02 });
     const roofMat = mat('concrete', { color: '#55544f', seed: 21 });
     const geo = chamferBox(w, h, d, 0.2);
     const ry = Math.max(1, floors / 2), Rd = Math.max(1, Math.round(d / 9)), Rw = Math.max(1, Math.round(w / 9));
@@ -229,7 +229,7 @@ export class MapBuilder {
       }
     }
     if (roof) this.box({ x, y: h, z, w, h: 0.3, d, m: mat('concrete', { color: '#5b5a55', seed: 31 }), repeat: [w / 4, d / 4] });
-    if (roof && style !== 'shanty') this.box({ x, y: h - 0.05, z, w: w + 0.28, h: 0.38, d: d + 0.28, m: col(trimColor(wall, style).getStyle(), 0.6), collide: false }); // cast cornice
+    if (roof && style !== 'shanty') this.box({ x, y: h - 0.12, z, w: w + 0.28, h: 0.38, d: d + 0.28, m: col(trimColor(wall, style).getStyle(), 0.6), collide: false }); // cast cornice
     if (interior) { // floor tile + a counter/pillar for cover
       this.patch(x, z, w - t * 2, d - t * 2, 'tile', { seed: rng.int(1, 99), color: rng.pick(['#9c9382', '#7f8a7a', '#8c7a6a']), scale: 4 }, 0.025);
       if (w > 6 && d > 6) this.box({ x: x + (rng.chance(0.5) ? -1 : 1) * w * 0.2, z: z + (rng.chance(0.5) ? -1 : 1) * d * 0.15, w: Math.min(3, w * 0.3), h: 1.0, d: 0.8, m: col('#4a3a2a'), rot: rng.chance(0.5) ? 0 : Math.PI / 2 });
@@ -248,8 +248,8 @@ export class MapBuilder {
     if (style !== 'glass' && style !== 'shanty') {
       band(0, 0.75, 0.22, base);
       if (floors > 1) band(h / floors - 0.12, 0.2, 0.14, tm);
-      band(h - (parapet ? 0.35 : 0.45), 0.45, 0.42, tm);
-    } else if (style === 'glass') band(h - 0.3, 0.3, 0.2, col('#3c4248', 0.35, 0.6));
+      band(h - 0.5, 0.46, 0.42, tm); // top stays just under the roof face, or the band would cover the roof
+    } else if (style === 'glass') band(h - 0.34, 0.3, 0.2, col('#3c4248', 0.35, 0.6));
     if (style === 'glass') return;
     const c = Math.cos(rot), sn = Math.sin(rot);
     const faces = [{ nx: 1, nz: 0, len: d, R: Rd, off: w / 2 }, { nx: -1, nz: 0, len: d, R: Rd, off: w / 2 }, { nx: 0, nz: 1, len: w, R: Rw, off: d / 2 }, { nx: 0, nz: -1, len: w, R: Rw, off: d / 2 }];

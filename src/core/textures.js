@@ -1,6 +1,7 @@
 // Procedural canvas textures so the game ships with zero image assets.
 import * as THREE from 'three';
 import { RNG } from './rng.js';
+import { paintFacade, paintBrick, paintConcrete, paintPlaster, paintCorrugated, paintMetal, paintTile, normalFromHeight } from './minipaint.js';
 
 const cache = new Map();
 
@@ -32,49 +33,34 @@ function grime(ctx, w, h, rng, n = 12) {
 
 // Random seeds are quantised to a few variants per texture type so that props share materials and batch into few draw calls.
 const SEED_VARIANTS = { brick: 4, concrete: 4, plaster: 4, asphalt: 2, sidewalk: 2, dirt: 2, grass: 2, cobble: 2, tile: 3, metal: 3, corrugated: 4, facade: 4, graffiti: 3, cloth: 3, water: 1 };
+// Texture detail follows the quality setting: low halves the miniature wall textures (memory on phones).
+let DETAIL = 'high';
+export function setTextureDetail(q) { DETAIL = q; }
+const normalCache = new Map(), normalOfMap = new WeakMap();
+/** The shared normal map that goes with a miniature colour texture (kept off userData: three.js JSON-copies userData on clone). */
+export function normalFor(map) { return normalOfMap.get(map) || null; }
+// colour-only params: they never change a texture's relief, so buildings that differ only in paint share a normal map
+const PAINT_KEYS = new Set(['color', 'wall', 'winColor', 'trim', 'lit', 'mortar', 'line', 'rust', 'frame']);
+const MINI = { facade: [paintFacade, 512, 2.5], brick: [paintBrick, 256, 2.5], concrete: [paintConcrete, 256, 2], plaster: [paintPlaster, 256, 2], corrugated: [paintCorrugated, 256, 3], metal: [paintMetal, 128, 2], tile: [paintTile, 256, 2] };
 export function tex(name, params = {}) {
   if (params.seed !== undefined && SEED_VARIANTS[name]) params = { ...params, seed: ((Math.abs(Math.floor(params.seed)) - 1) % SEED_VARIANTS[name]) + 1 };
-  const key = name + JSON.stringify(params);
+  const key = name + JSON.stringify(params) + (MINI[name] ? DETAIL : '');
   if (cache.has(key)) return cache.get(key);
-  const t = GEN[name](params); t.name = name;
+  let t;
+  if (MINI[name]) {
+    const [paint, size, strength] = MINI[name], S = DETAIL === 'low' ? size / 2 : size;
+    const r = paint(params, S); t = finish(r.c, r.repeat);
+    const lk = name + JSON.stringify(Object.fromEntries(Object.entries(params).filter(([k]) => !PAINT_KEYS.has(k)))) + DETAIL;
+    let n = normalCache.get(lk);
+    if (!n) { n = finish(normalFromHeight(r.hc, strength), r.repeat); n.colorSpace = THREE.NoColorSpace; n.name = name + ':normal'; normalCache.set(lk, n); }
+    normalOfMap.set(t, n);
+  } else t = GEN[name](params);
+  t.name = name;
   cache.set(key, t);
   return t;
 }
 
 const GEN = {
-  brick({ color = '#8a3b2a', mortar = '#4a4038', seed = 1, dirty = 0.6 } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = mortar; ctx.fillRect(0, 0, w, h);
-    const bw = 32, bh = 16;
-    for (let y = 0; y < h; y += bh) {
-      const off = (y / bh) % 2 ? bw / 2 : 0;
-      for (let x = -bw; x < w; x += bw) {
-        const col = new THREE.Color(color);
-        col.offsetHSL(rng.float(-0.01, 0.01), rng.float(-0.05, 0.05), rng.float(-0.06, 0.06));
-        ctx.fillStyle = col.getStyle();
-        ctx.fillRect(x + off + 1, y + 1, bw - 2, bh - 2);
-      }
-    }
-    noise(ctx, w, h, rng, 0.1, 3000); grime(ctx, w, h, rng, 10 * dirty);
-    return finish(c, [2, 2]);
-  },
-  concrete({ color = '#8d8d86', seed = 2, dirty = 0.5 } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    noise(ctx, w, h, rng, 0.12, 6000);
-    for (let i = 0; i < 6; i++) { ctx.strokeStyle = `rgba(0,0,0,${rng.float(0.1, 0.3)})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(rng.float(0, w), rng.float(0, h)); ctx.lineTo(rng.float(0, w), rng.float(0, h)); ctx.stroke(); }
-    grime(ctx, w, h, rng, 12 * dirty);
-    return finish(c, [2, 2]);
-  },
-  plaster({ color = '#d9c9a3', seed = 3, dirty = 0.6 } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    noise(ctx, w, h, rng, 0.07, 4000);
-    // peeling patches
-    for (let i = 0; i < 5 * dirty; i++) { ctx.fillStyle = `rgba(90,70,60,${rng.float(0.2, 0.5)})`; ctx.beginPath(); ctx.ellipse(rng.float(0, w), rng.float(0, h), rng.float(6, 30), rng.float(4, 18), rng.float(0, 3), 0, 7); ctx.fill(); }
-    grime(ctx, w, h, rng, 14 * dirty);
-    return finish(c, [2, 2]);
-  },
   asphalt({ seed = 4, color = '#3c3c42' } = {}) {
     const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
     ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
@@ -116,62 +102,6 @@ const GEN = {
     }
     noise(ctx, w, h, rng, 0.1, 4000); grime(ctx, w, h, rng, 8);
     return finish(c, [6, 6]);
-  },
-  tile({ seed = 9, color = '#b8b2a4', line = '#5a554c', size = 32 } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = line; ctx.lineWidth = 2;
-    for (let x = 0; x <= w; x += size) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-    for (let y = 0; y <= h; y += size) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-    noise(ctx, w, h, rng, 0.08, 3000); grime(ctx, w, h, rng, 6);
-    return finish(c, [4, 4]);
-  },
-  metal({ seed = 10, color = '#6e7278', rust = 0.3 } = {}) {
-    const w = 128, h = 128, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    noise(ctx, w, h, rng, 0.1, 2000);
-    for (let i = 0; i < 20 * rust; i++) { ctx.fillStyle = `rgba(140,70,30,${rng.float(0.2, 0.6)})`; ctx.beginPath(); ctx.ellipse(rng.float(0, w), rng.float(0, h), rng.float(3, 14), rng.float(3, 10), 0, 0, 7); ctx.fill(); }
-    return finish(c, [1, 1]);
-  },
-  corrugated({ seed = 11, color = '#8a8f93', rust = 0.6 } = {}) {
-    const w = 128, h = 128, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
-    for (let x = 0; x < w; x += 8) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x, 0, 3, h); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(x + 4, 0, 2, h); }
-    for (let i = 0; i < 30 * rust; i++) { ctx.fillStyle = `rgba(150,70,30,${rng.float(0.2, 0.7)})`; ctx.beginPath(); ctx.ellipse(rng.float(0, w), rng.float(0, h), rng.float(3, 16), rng.float(3, 12), 0, 0, 7); ctx.fill(); }
-    return finish(c, [2, 2]);
-  },
-  // Building facade with windows; rows x cols per texture tile.
-  facade({ seed = 12, wall = '#8a3b2a', style = 'brick', cols = 3, rows = 2, lit = 0.35, winColor = '#1a2230', frame = '#2b2b2b', balcony = false, shutters = false, ac = true } = {}) {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
-    // base wall
-    if (style === 'brick') {
-      ctx.fillStyle = '#4a4038'; ctx.fillRect(0, 0, w, h);
-      for (let y = 0; y < h; y += 10) { const off = (y / 10) % 2 ? 10 : 0; for (let x = -20; x < w; x += 20) { const col = new THREE.Color(wall); col.offsetHSL(0, rng.float(-0.04, 0.04), rng.float(-0.06, 0.06)); ctx.fillStyle = col.getStyle(); ctx.fillRect(x + off + 1, y + 1, 18, 8); } }
-    } else if (style === 'glass') {
-      ctx.fillStyle = wall; ctx.fillRect(0, 0, w, h);
-    } else {
-      ctx.fillStyle = wall; ctx.fillRect(0, 0, w, h); noise(ctx, w, h, rng, 0.08, 3000);
-    }
-    const cw = w / cols, ch = h / rows;
-    for (let r = 0; r < rows; r++) for (let cI = 0; cI < cols; cI++) {
-      const x = cI * cw + cw * 0.25, y = r * ch + ch * 0.2, ww = cw * 0.5, wh = ch * 0.55;
-      if (style === 'glass') { ww && (ctx.fillStyle = rng.chance(lit) ? '#8fb4d9' : '#2a3a4c'); ctx.fillRect(cI * cw + 2, r * ch + 2, cw - 4, ch - 4); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(cI * cw + 2, r * ch + 2, cw * 0.3, ch - 4); continue; }
-      ctx.fillStyle = frame; ctx.fillRect(x - 3, y - 3, ww + 6, wh + 6);
-      ctx.fillStyle = rng.chance(lit) ? `rgb(${rng.int(200, 255)},${rng.int(170, 220)},${rng.int(90, 150)})` : winColor;
-      ctx.fillRect(x, y, ww, wh);
-      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x, y, ww * 0.4, wh);
-      ctx.fillStyle = frame; ctx.fillRect(x + ww / 2 - 1, y, 2, wh); ctx.fillRect(x, y + wh / 2 - 1, ww, 2);
-      if (rng.chance(0.25)) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, ww, wh * rng.float(0.3, 0.8)); } // blinds
-      if (shutters && rng.chance(0.5)) { ctx.fillStyle = '#3d5a3a'; ctx.fillRect(x - ww * 0.3, y, ww * 0.26, wh); ctx.fillRect(x + ww + ww * 0.04, y, ww * 0.26, wh); }
-      if (balcony) { ctx.fillStyle = '#333'; ctx.fillRect(x - ww * 0.3, y + wh, ww * 1.6, 5); for (let b = 0; b < 8; b++) ctx.fillRect(x - ww * 0.3 + b * ww * 0.22, y + wh - 10, 2, 10); }
-      if (ac && rng.chance(0.22)) { ctx.fillStyle = '#9aa0a6'; ctx.fillRect(x + ww * 0.1, y + wh * 0.6, ww * 0.4, wh * 0.4); ctx.fillStyle = '#555'; ctx.fillRect(x + ww * 0.14, y + wh * 0.66, ww * 0.32, wh * 0.28); }
-      // sill
-      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x - 4, y + wh + 3, ww + 8, 3);
-    }
-    grime(ctx, w, h, rng, 8);
-    // drip streaks
-    for (let i = 0; i < 6; i++) { ctx.fillStyle = `rgba(0,0,0,${rng.float(0.05, 0.2)})`; const x = rng.float(0, w); ctx.fillRect(x, 0, rng.float(1, 4), h); }
-    return finish(c, [1, 1]);
   },
   graffiti({ seed = 13, base = '#777', text = 'GB' } = {}) {
     const w = 256, h = 128, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);

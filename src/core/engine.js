@@ -1,6 +1,6 @@
 // Renderer, scene, lighting, and pooled visual effects.
 import * as THREE from 'three';
-import { tex, skyGradient, roomPanorama } from './textures.js';
+import { tex, skyGradient, roomPanorama, setTextureDetail } from './textures.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { setGunEnvironment, setPlasticQuality } from '../game/character.js';
 // toy reskin: view-model lights were tuned to lift dark metal guns; coloured plastic needs far less
@@ -48,7 +48,7 @@ export class Engine {
     this.running = false;
   }
   setQuality(q) {
-    this.quality = q; setPlasticQuality(q);
+    this.quality = q; setPlasticQuality(q); setTextureDetail(q);
     const pr = window.devicePixelRatio || 1;
     this.renderer.setPixelRatio(q === 'low' ? Math.min(pr, 1) : q === 'medium' ? Math.min(pr, 1.5) : Math.min(pr, 2));
     this.renderer.shadowMap.enabled = q !== 'low';

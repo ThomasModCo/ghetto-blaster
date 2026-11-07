@@ -161,7 +161,7 @@ for (const f of fs.readdirSync(RAW).filter((x) => x.endsWith('.glb'))) {
       if (P.sat !== undefined) { const l = 0.2126 * c[i] + 0.7152 * c[i + 1] + 0.0722 * c[i + 2]; for (let k = 0; k < 3; k++) c[i + k] = l + (c[i + k] - l) * P.sat; }
       const mx = Math.max(c[i], c[i + 1], c[i + 2]), mn = Math.min(c[i], c[i + 1], c[i + 2]), sat = mx > 0 ? (mx - mn) / mx : 0;
       const ss = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
-      c[i + 3] = P.tint && ss(0.1, 0.22, mx) * (1 - ss(0.14, 0.32, sat)) > 0.5 ? 1 : 0; // hard mask: soft edges smear pale streaks across big panels
+      c[i + 3] = P.tint && ss(0.45, 0.6, mx) * (1 - ss(0.14, 0.32, sat)) > 0.5 ? 1 : 0; // hard mask: soft edges smear pale streaks across big panels
     }
     a.setArray(c);
   }
