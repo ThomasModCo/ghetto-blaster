@@ -112,6 +112,7 @@ export class CharacterModel {
     else if (faction === 'sicario') { headMat = P(0.95); extra.push(['vest', P(0.86)]); }
     else { hat = 'cap'; extra.push(['badge', P(1.35)], ['belt', P(0.72)]); }
     if (hatOverride !== undefined) hat = hatOverride;
+    this.hat = hat; // remembered so the results podium can rebuild the same figure
     this.plastic = base;
     this.accent = acc;
     const s = big ? 1.15 : 1;

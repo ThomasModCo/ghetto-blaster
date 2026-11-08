@@ -12,7 +12,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 const V = () => new THREE.Vector3(), Q = () => new THREE.Quaternion();
 const Y = new THREE.Vector3(0, 1, 0);
 const _m = new THREE.Matrix4(), _invG = new THREE.Matrix4(), _p = V(), _s = V(), _q = Q(), _q2 = Q(), _q3 = Q();
-const _a = V(), _t = V(), _e = V(), _d = V(), _n = V(), _pole = V(), _tmp = V();
+const _a = V(), _t = V(), _e = V(), _d = V(), _n = V(), _pole = V(), _tmp = V(), _tw1 = V(), _tw2 = V(), _tw3 = V(), _bend = V();
 
 export class Figure {
   constructor(template, material, scale = 1) {
@@ -32,6 +32,11 @@ export class Figure {
       this.rest[n] = { p, q, lq: bone.quaternion.clone(), lp: bone.position.clone(), dir: Y.clone().applyQuaternion(q) };
     }
     if (!this.ok) return;
+    // rest bend axis per limb bone (group space, perpendicular to the bone): elbows bend back, knees bend forward.
+    // _aim uses it to add twist, so a limb rolls to face its IK pole instead of only swinging (no corkscrewed wrists).
+    for (const [names, ax] of [[['LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm'], [0, 0, -1]], [['LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg'], [0, 0, 1]]]) {
+      for (const n of names) { const r = this.rest[n], v = V().fromArray(ax); v.addScaledVector(r.dir, -v.dot(r.dir)); if (v.lengthSq() > 1e-6) r.bend = v.normalize(); }
+    }
     const len = (a, b) => this.rest[a].p.distanceTo(this.rest[b].p);
     this.len = {
       Left: [len('LeftArm', 'LeftForeArm'), len('LeftForeArm', 'LeftHand')], Right: [len('RightArm', 'RightForeArm'), len('RightForeArm', 'RightHand')],
@@ -79,7 +84,16 @@ export class Figure {
     const bone = this.b[name]; _m.multiplyMatrices(_invG, bone.parent.matrixWorld); _m.decompose(_p, _q3, _s);
     bone.quaternion.copy(_q3.invert().multiply(qRoot)); bone.updateMatrixWorld(true);
   }
-  _aim(name, dir) { _q2.setFromUnitVectors(this.rest[name].dir, _tmp.copy(dir).normalize()).multiply(this.rest[name].q); this._setRootQ(name, _q2); }
+  /** Point a bone along `dir` (group space). With `bend`, also roll it about `dir` so its rest bend axis faces `bend`. */
+  _aim(name, dir, bend = null) {
+    const r = this.rest[name], d = _tmp.copy(dir).normalize();
+    _q2.setFromUnitVectors(r.dir, d);
+    if (bend && r.bend) {
+      const cur = _tw1.copy(r.bend).applyQuaternion(_q2), want = _tw2.copy(bend).addScaledVector(d, -bend.dot(d));
+      if (want.lengthSq() > 1e-8) { want.normalize(); const ang = Math.atan2(_tw3.crossVectors(cur, want).dot(d), cur.dot(want)); _q3.setFromAxisAngle(d, ang); _q2.premultiply(_q3); }
+    }
+    _q2.multiply(r.q); this._setRootQ(name, _q2);
+  }
   /** Two-bone IK: aims `upper` and `lower` so the chain's end reaches `target` with the middle joint towards `pole`. */
   _ik(upper, lower, [l1, l2], target, pole) {
     this._pos(upper, _a); _d.subVectors(target, _a);
@@ -87,8 +101,9 @@ export class Figure {
     const x = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist), h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
     _pole.sub(_a); _pole.addScaledVector(_n, -_pole.dot(_n)); if (_pole.lengthSq() < 1e-8) _pole.set(0, -1, 0); _pole.normalize();
     _e.copy(_a).addScaledVector(_n, x).addScaledVector(_pole, h);
-    this._aim(upper, _tmp.subVectors(_e, _a));
-    this._aim(lower, _d.subVectors(target, _e));
+    _bend.copy(_pole); // perpendicular to the chain, towards the elbow / knee
+    this._aim(upper, _tmp.subVectors(_e, _a), _bend);
+    this._aim(lower, _d.subVectors(target, _e), _bend);
   }
   /**
    * cm: the CharacterModel (pivots already posed this frame). hands: { obj, Right, Left } grip points in obj's local

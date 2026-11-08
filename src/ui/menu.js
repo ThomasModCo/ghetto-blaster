@@ -1,4 +1,5 @@
 // All non-HUD screens. Pure DOM; the game state machine in main.js drives these.
+import { Podium } from './podium.js';
 import { STOCK_LOADOUTS, allLoadouts, getSave, persist, resolveLoadout } from '../game/loadouts.js';
 import { WEAPONS, PRIMARIES, SECONDARIES, weaponStats, GUN_GAME_ORDER } from '../game/weapons.js';
 import { TACTICALS, LETHALS } from '../game/equipment.js';
@@ -125,6 +126,7 @@ export function showScoreboard(match, onQuit) { renderScoreboard(match); show('s
 export function hideScoreboard() { hide('screen-scoreboard'); }
 
 // ---------------- results ----------------
+let podium = null;
 export function showResults(result, match, payout, wallet, onAgain, onMenu) {
   hideAll(); show('screen-results');
   const t = $('results-title'); t.className = 'results-title ' + (result.win ? 'win' : result.draw ? 'draw' : 'lose');
@@ -132,7 +134,8 @@ export function showResults(result, match, payout, wallet, onAgain, onMenu) {
   const p = match.player; $('results-sub').textContent = `${match.mode.name} · ${match.map.def.name.toUpperCase()} · ${p.kills} KILLS / ${p.deaths} DEATHS · BEST STREAK ${p.bestStreak}`;
   $('results-board').innerHTML = renderScoreboard(match, true).innerHTML;
   $('results-bet').innerHTML = match.bet > 0 ? (payout > 0 ? `<span class="won">BET WON +$${payout}</span>` : `<span class="lost">BET LOST -$${match.bet}</span>`) + ` <span style="color:#9a9aa3;font-size:14px">BANKROLL $${wallet}</span>` : `<span style="color:#9a9aa3;font-size:14px">NO BET · BANKROLL $${wallet}</span>`;
-  $('results-again').onclick = () => { sfx('ui'); onAgain(); }; $('results-menu').onclick = () => { sfx('ui'); onMenu(); };
+  podium = podium || new Podium($('results-podium')); podium.show(match);
+  $('results-again').onclick = () => { podium.hide(); sfx('ui'); onAgain(); }; $('results-menu').onclick = () => { podium.hide(); sfx('ui'); onMenu(); };
 }
 
 // ---------------- dialogs ----------------

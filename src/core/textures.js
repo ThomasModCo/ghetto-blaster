@@ -55,24 +55,38 @@ export function tex(name, params = {}) {
 
 const GEN = {
   graffiti({ seed = 13, base = '#777', text = 'GB' } = {}) {
+    // toy reskin: a die-cut vinyl sticker of a tag: crisp colour bursts, chunky letters, thick white cut line
     const w = 256, h = 128, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(seed);
     ctx.clearRect(0, 0, w, h);
-    const colors = ['#ff2d95', '#00e5ff', '#ffe600', '#7cff00', '#ff6a00', '#b36bff', '#ffffff'];
-    for (let i = 0; i < 3; i++) { ctx.fillStyle = rng.pick(colors); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.ellipse(rng.float(40, w - 40), rng.float(20, h - 20), rng.float(30, 80), rng.float(14, 40), rng.float(-0.4, 0.4), 0, 7); ctx.fill(); }
-    ctx.globalAlpha = 1;
-    ctx.font = `bold ${rng.int(60, 90)}px Impact, Arial Black, sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 8; ctx.strokeStyle = '#000'; ctx.strokeText(text, w / 2, h / 2);
-    ctx.fillStyle = rng.pick(colors); ctx.fillText(text, w / 2, h / 2);
-    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.strokeText(text, w / 2, h / 2);
+    const colors = ['#ff2d95', '#00c8e0', '#ffd60a', '#7cd320', '#ff6a00', '#a066ff'];
+    const fs = rng.int(56, 78); ctx.font = `bold ${fs}px Impact, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const burst = (col, cx, cy, rx, ry) => { ctx.fillStyle = col; ctx.beginPath(); for (let i = 0; i < 18; i++) { const a = (i / 18) * Math.PI * 2, k = i % 2 ? 0.78 : 1; ctx.lineTo(cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k); } ctx.closePath(); ctx.fill(); };
+    // white die-cut backing first (covers everything that follows, plus a margin)
+    ctx.save(); ctx.fillStyle = '#fbf8f0'; ctx.strokeStyle = '#fbf8f0'; ctx.lineJoin = 'round'; ctx.lineWidth = 22;
+    burst('#fbf8f0', w / 2 - 20, h / 2, 70, 40); ctx.strokeText(text, w / 2, h / 2); ctx.restore();
+    burst(colors[rng.int(0, colors.length - 1)], w / 2 - 20, h / 2, 60, 32);
+    ctx.lineJoin = 'round'; ctx.lineWidth = 9; ctx.strokeStyle = '#141414'; ctx.strokeText(text, w / 2, h / 2);
+    // two-tone letter fill (hard split across the middle) with a glossy top edge
+    const top = colors[rng.int(0, colors.length - 1)], bot = colors[rng.int(0, colors.length - 1)], lg = ctx.createLinearGradient(0, h / 2 - fs / 2, 0, h / 2 + fs / 2);
+    lg.addColorStop(0, top); lg.addColorStop(0.52, top); lg.addColorStop(0.52, bot); lg.addColorStop(1, bot);
+    ctx.fillStyle = lg; ctx.fillText(text, w / 2, h / 2);
     const t = finish(c, [1, 1]); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
   },
   sign({ seed = 14, text = 'LIQUOR', bg = '#b3121b', fg = '#fff', w = 256, h = 64 } = {}) {
-    const c = canvas(w, h), ctx = c.getContext('2d');
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0, h - 8, w, 8);
-    ctx.font = `bold ${Math.floor(h * 0.62)}px Impact, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = fg; ctx.fillText(text, w / 2, h / 2 - 2);
+    // toy reskin: a printed sticker on the model, white die-cut border, faint gloss, one corner peeling back
+    const c = canvas(w, h), ctx = c.getContext('2d'), b = Math.max(3, Math.round(h * 0.07)), r = Math.round(h * 0.16);
+    ctx.fillStyle = '#2e2d2b'; ctx.fillRect(0, 0, w, h); // the wall behind, seen under the peel
+    ctx.fillStyle = '#f6f3ea'; ctx.beginPath(); ctx.roundRect(1, 1, w - 2, h - 2, r); ctx.fill();
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(1 + b, 1 + b, w - 2 - b * 2, h - 2 - b * 2, Math.max(2, r - b)); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(1 + b, h - b - Math.round(h * 0.14), w - 2 - b * 2, Math.round(h * 0.14) - 1);
+    ctx.font = `bold ${Math.floor(h * 0.56)}px Impact, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillText(text, w / 2 + 2, h / 2 + 1); ctx.fillStyle = fg; ctx.fillText(text, w / 2, h / 2 - 1);
+    const g = ctx.createLinearGradient(0, 0, w * 0.4, h); g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(1, 1, w - 2, h - 2, r); ctx.fill();
+    // peeled top-right corner: wall shows through, the curled flap shows the sticker's pale back with a soft shadow
+    const p = Math.round(h * 0.42);
+    ctx.fillStyle = '#2e2d2b'; ctx.beginPath(); ctx.moveTo(w - p, 0); ctx.lineTo(w, 0); ctx.lineTo(w, p); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.moveTo(w - p, 0); ctx.lineTo(w, p); ctx.lineTo(w - p * 0.7, p * 0.9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e4dfd2'; ctx.beginPath(); ctx.moveTo(w - p, 0); ctx.lineTo(w, p); ctx.lineTo(w - p * 0.82, p * 0.72); ctx.closePath(); ctx.fill();
     const t = finish(c, [1, 1]); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
   },
   neon({ seed = 15, text = 'OPEN', color = '#ff2d95', w = 256, h = 96 } = {}) {
@@ -115,43 +129,39 @@ const GEN = {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   },
   // ---- muzzle flash layers (256px, soft gradients + noise) ----
-  flashCore() {
+  flashCore() { // toy reskin: a cap-gun "pop" burst, a crisp spiky star instead of a realistic fireball
     const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(31);
-    const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.12, 'rgba(255,250,220,1)'); g.addColorStop(0.3, 'rgba(255,200,90,0.85)'); g.addColorStop(0.55, 'rgba(255,120,30,0.35)'); g.addColorStop(1, 'rgba(255,60,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-    // irregular hot spots
-    ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 14; i++) { const a = rng.float(0, 6.28), r = rng.float(20, 70); const x = 128 + Math.cos(a) * r, y = 128 + Math.sin(a) * r; const gg = ctx.createRadialGradient(x, y, 0, x, y, rng.float(14, 40)); gg.addColorStop(0, 'rgba(255,230,160,0.55)'); gg.addColorStop(1, 'rgba(255,150,40,0)'); ctx.fillStyle = gg; ctx.fillRect(0, 0, w, h); }
+    const star = (R, r, n, jitter) => { ctx.beginPath(); for (let i = 0; i < n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2, rad = (i % 2 ? r : R) * (1 + rng.float(-jitter, jitter)); ctx.lineTo(128 + Math.cos(a) * rad, 128 + Math.sin(a) * rad); } ctx.closePath(); ctx.fill(); };
+    ctx.fillStyle = 'rgba(255,120,30,0.85)'; star(124, 64, 11, 0.12);
+    ctx.fillStyle = 'rgba(255,196,70,1)'; star(98, 52, 11, 0.1);
+    const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 70); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.5, 'rgba(255,248,210,1)'); g.addColorStop(1, 'rgba(255,230,140,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(128, 128, 70, 0, 7); ctx.fill();
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   },
-  flashTongue() {
-    // vertical flame tongue: bright at the base (bottom), tapering to the tip (top), jagged soft edges
+  flashTongue() { // crisp flame petals (bright base at the bottom, pointed tips at the top)
     const w = 128, h = 256, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(37);
     ctx.clearRect(0, 0, w, h);
-    ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 9; i++) {
-      const len = h * rng.float(0.55, 1.0), wid = w * rng.float(0.18, 0.5), off = rng.float(-12, 12);
-      const g = ctx.createLinearGradient(0, h, 0, h - len);
-      g.addColorStop(0, `rgba(255,255,235,${rng.float(0.35, 0.6)})`); g.addColorStop(0.25, `rgba(255,210,110,${rng.float(0.3, 0.5)})`); g.addColorStop(0.6, `rgba(255,130,40,${rng.float(0.15, 0.3)})`); g.addColorStop(1, 'rgba(255,70,10,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(w / 2 + off - wid / 2, h); ctx.quadraticCurveTo(w / 2 + off - wid * 0.2, h - len * 0.6, w / 2 + off + rng.float(-10, 10), h - len); ctx.quadraticCurveTo(w / 2 + off + wid * 0.2, h - len * 0.6, w / 2 + off + wid / 2, h); ctx.closePath(); ctx.fill();
-    }
-    // bright base
-    const g2 = ctx.createRadialGradient(w / 2, h - 10, 0, w / 2, h - 10, 60); g2.addColorStop(0, 'rgba(255,255,255,0.9)'); g2.addColorStop(1, 'rgba(255,200,100,0)'); ctx.fillStyle = g2; ctx.fillRect(0, 0, w, h);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
-  },
-  flashRing() {
-    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d');
-    ctx.clearRect(0, 0, w, h);
-    const g = ctx.createRadialGradient(128, 128, 70, 128, 128, 128);
-    g.addColorStop(0, 'rgba(255,200,120,0)'); g.addColorStop(0.45, 'rgba(255,220,160,0.7)'); g.addColorStop(0.6, 'rgba(255,170,80,0.45)'); g.addColorStop(1, 'rgba(255,120,40,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const petal = (cx, len, wid, cols) => { const g = ctx.createLinearGradient(0, h, 0, h - len); cols.forEach(([o, col]) => g.addColorStop(o, col)); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx - wid / 2, h); ctx.bezierCurveTo(cx - wid / 2, h - len * 0.45, cx - wid * 0.12, h - len * 0.75, cx, h - len); ctx.bezierCurveTo(cx + wid * 0.12, h - len * 0.75, cx + wid / 2, h - len * 0.45, cx + wid / 2, h); ctx.fill(); };
+    petal(64 + rng.float(-6, 6), h * 0.98, w * 0.7, [[0, 'rgba(255,140,40,0.9)'], [1, 'rgba(255,90,20,0.6)']]);
+    petal(64 + rng.float(-4, 4), h * 0.78, w * 0.45, [[0, 'rgba(255,215,90,1)'], [1, 'rgba(255,170,60,0.8)']]);
+    petal(64, h * 0.5, w * 0.24, [[0, 'rgba(255,255,240,1)'], [1, 'rgba(255,240,180,0.9)']]);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   },
-  smokePuff() {
+  flashRing() { // comic pop ring: a crisp thin ring with short motion dashes
+    const w = 256, h = 256, c = canvas(w, h), ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(255,225,150,0.9)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(128, 128, 100, 0, 7); ctx.stroke();
+    ctx.lineWidth = 5; ctx.lineCap = 'round';
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ctx.beginPath(); ctx.moveTo(128 + Math.cos(a) * 108, 128 + Math.sin(a) * 108); ctx.lineTo(128 + Math.cos(a) * 124, 128 + Math.sin(a) * 124); ctx.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  },
+  smokePuff() { // paper-cap smoke: a small white cartoon cloud with a crisp rim and a soft shaded underside
     const w = 128, h = 128, c = canvas(w, h), ctx = c.getContext('2d'), rng = new RNG(41);
     ctx.clearRect(0, 0, w, h);
-    for (let i = 0; i < 18; i++) { const x = 64 + rng.float(-22, 22), y = 64 + rng.float(-22, 22), r = rng.float(18, 40); const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(200,200,210,${rng.float(0.08, 0.16)})`); g.addColorStop(1, 'rgba(200,200,210,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); }
+    const blobs = []; for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2 + rng.float(-0.3, 0.3), d = rng.float(14, 24); blobs.push([64 + Math.cos(a) * d, 66 + Math.sin(a) * d * 0.8, rng.float(16, 24)]); } blobs.push([64, 64, 28]);
+    ctx.fillStyle = 'rgba(150,146,140,0.9)'; for (const [x, y, r] of blobs) { ctx.beginPath(); ctx.arc(x, y + 2, r + 2, 0, 7); ctx.fill(); }
+    ctx.fillStyle = 'rgba(244,242,236,0.95)'; for (const [x, y, r] of blobs) { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }
+    const g = ctx.createLinearGradient(0, 30, 0, 100); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(120,116,110,0.35)'); ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   },
   muzzle() {

@@ -151,7 +151,7 @@ export class FX {
     this.particleTex = tex('particle'); this.muzzleTex = tex('muzzle');
     // muzzle flash layer materials (shared base, cloned per flash so opacity animates independently; same shader program)
     const add = (map, color) => new THREE.MeshBasicMaterial({ map, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
-    this.mfMat = { core: new THREE.SpriteMaterial({ map: tex('flashCore'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), tongue: add(tex('flashTongue'), 0xffffff), ring: add(tex('flashRing'), 0xffffff), smoke: new THREE.SpriteMaterial({ map: tex('smokePuff'), transparent: true, depthWrite: false, fog: true, color: 0x9a9aa0 }) };
+    this.mfMat = { core: new THREE.SpriteMaterial({ map: tex('flashCore'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), tongue: add(tex('flashTongue'), 0xffffff), ring: add(tex('flashRing'), 0xffffff), smoke: new THREE.SpriteMaterial({ map: tex('smokePuff'), transparent: true, depthWrite: false, fog: true, color: 0xdedad2 }) };
     const tg = new THREE.PlaneGeometry(1, 1); tg.translate(0, 0.5, 0); tg.rotateX(Math.PI / 2); this.tongueGeo = tg; // extends along +Z from the origin
     const rg = new THREE.PlaneGeometry(1, 1); this.ringGeo = rg; // faces +Z (perpendicular to the barrel)
     this.vmScene = null;
@@ -222,7 +222,7 @@ export class FX {
     parent.add(g);
     this.items.push({ obj: g, life, maxLife: life, kind: 'muzzle', parts: items, parent });
     // smoke puff drifting from the muzzle
-    if (P.smoke > 0) { const sp = new THREE.Sprite(this.mfMat.smoke.clone()); sp.material.opacity = 0; sp.position.copy(pos).addScaledVector(dir, P.length * 0.5); sp.scale.setScalar(P.smoke * 0.5); sp.material.rotation = Math.random() * 6; this.group.add(sp); this.items.push({ obj: sp, life: 0.9, maxLife: 0.9, kind: 'smokepuff', vel: dir.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.5, 0)), grow: P.smoke, peak: P.smokeAlpha }); }
+    if (P.smoke > 0) { const sp = new THREE.Sprite(this.mfMat.smoke.clone()); sp.material.opacity = 0; sp.position.copy(pos).addScaledVector(dir, P.length * 0.5); sp.scale.setScalar(P.smoke * 0.5); sp.material.rotation = Math.random() * 6; this.group.add(sp); this.items.push({ obj: sp, life: 0.9, maxLife: 0.9, kind: 'smokepuff', vel: dir.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.5, 0)), grow: P.smoke * 0.8, peak: Math.min(0.85, P.smokeAlpha * 2.6) }); } // paper-cap puff: denser, a touch smaller
     // sparks
     for (let i = 0; i < P.sparks; i++) { const v = dir.clone().multiplyScalar(6 + Math.random() * 10).add(new THREE.Vector3((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4)); this._spawn(pos, v, 0.12 + Math.random() * 0.2, 0.35, new THREE.Color(1, 0.75, 0.3), 6, 3); }
     // light

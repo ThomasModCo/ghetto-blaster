@@ -300,7 +300,17 @@ export class MapBuilder {
     if (dx) this.box({ x: lx, z: lz, w: 1.2, h: height, d: width, m: material }); else this.box({ x: lx, z: lz, w: width, h: height, d: 1.2, m: material });
     // side rails
     const rm = col('#333', 0.5, 0.6); const len = steps * stepD + 1.2;
-    for (const s of [-1, 1]) { const ox = dz ? s * (width / 2) : 0, oz = dx ? s * (width / 2) : 0; const r = new THREE.Mesh(chamferBox(dx ? len : 0.06, 1.0, dz ? len : 0.06), rm); r.position.set(x + dx * len / 2 + ox, height / 2 + 0.6, z + dz * len / 2 + oz); r.rotation[dx ? 'z' : 'x'] = (dx ? -dx : dz) * Math.atan2(height, len) * 1; this.group.add(r); }
+    // a thin sloped handrail on three posts (visual only — the rails never had colliders); the old solid 1 m planks read as black slabs
+    const slope = Math.hypot(len, height), run = steps * stepD;
+    for (const s of [-1, 1]) {
+      const ox = dz ? s * (width / 2 - 0.05) : 0, oz = dx ? s * (width / 2 - 0.05) : 0;
+      const r = new THREE.Mesh(chamferBox(dx ? slope : 0.07, 0.07, dz ? slope : 0.07, 0.02), rm); r.position.set(x + dx * len / 2 + ox, height / 2 + 0.95, z + dz * len / 2 + oz); r.rotation[dx ? 'z' : 'x'] = (dx ? dx : -dz) * Math.atan2(height, len); this.group.add(r);
+      for (const t of [0.06, 0.5, 0.94]) {
+        const a = t * len, top = a >= run ? height : Math.min(height, Math.ceil(a / stepD) * stepH), ph = t * height + 0.95 - top;
+        if (ph < 0.2) continue;
+        const pst = new THREE.Mesh(chamferBox(0.06, ph, 0.06, 0.015), rm); pst.position.set(x + dx * a + ox, top + ph / 2, z + dz * a + oz); this.group.add(pst);
+      }
+    }
   }
   /** Walkable elevated slab (bridge, overpass, catwalk). */
   platform({ x, z, w, d, y, t = 0.4, m = null, rails = true }) {
@@ -328,7 +338,7 @@ export class MapBuilder {
   prop(type, o = {}) {
     const { x = 0, z = 0, rot = 0 } = o; const rng = this.rng;
     const P = PROPS[type]; if (!P) { console.warn('unknown prop', type); return; }
-    const G = GLB_PROPS[type], tpl = G && MODELS.props.get(type);
+    const G = GLB_PROPS[type], tpl = G && (!G.when || G.when(o)) && MODELS.props.get(type);
     if (!tpl) { P.call(this, x, z, rot, o, rng); return; }
     // Run the original builder into a throwaway group: it makes exactly the same RNG draws, colliders, lights and
     // landmarks as before, so layouts, nav and pre-planned outcomes can't change. Then show the generated mesh instead,
@@ -339,8 +349,9 @@ export class MapBuilder {
     const m = new THREE.Mesh(tpl.geo, propMaterial(tpl.tint ? propTint(tmp) : null));
     const k = G.scale ? G.scale(tmp, o) : 1, off = G.offset || [0, 0, 0];
     m.scale.setScalar(k); m.rotation.y = rot;
-    m.position.set(x + Math.cos(rot) * off[0] + Math.sin(rot) * off[2], (o.y || 0) + off[1], z - Math.sin(rot) * off[0] + Math.cos(rot) * off[2]);
+    m.position.set(x + Math.cos(rot) * off[0] + Math.sin(rot) * off[2], (o.y || 0) + off[1] + (G.yOffset ? G.yOffset(o) : 0), z - Math.sin(rot) * off[0] + Math.cos(rot) * off[2]);
     if (G.stretchX) m.scale.x = G.stretchX(tmp, o);
+    if (G.stretch) m.scale.fromArray(G.stretch(o));
     m.castShadow = true; m.receiveShadow = true; this.group.add(m);
     if (G.head) G.head.call(this, tpl, m, o, nLights);
     if (G.keep) { const keep = []; tmp.traverse((c) => { if (c.isMesh && c.material && c.material.map && G.keep(c)) keep.push(c); }); for (const c of keep) { c.getWorldPosition(c.position); c.getWorldQuaternion(c.quaternion); c.getWorldScale(c.scale); c.removeFromParent(); this.group.add(c); } }
@@ -520,6 +531,14 @@ const GLB_PROPS = {
   container: { stretchX: (tmp, o) => (o.len || 6) / 6 },
   tree: { scale: (tmp) => firstMesh(tmp, (c) => c.geometry.type === 'CylinderGeometry').geometry.parameters.radiusTop / 0.22 },
   palm: { scale: (tmp) => firstMesh(tmp, (c) => c.geometry.type === 'CylinderGeometry').geometry.parameters.radiusTop / 0.18 },
+  // second batch
+  planter: { stretch: (o) => [(o.w || 2.4) / 2.4, 1, (o.d || 1.0) / 1.0] },
+  pole: { when: (o) => o.wires !== false, scale: (tmp, o) => (o.h || 8) / 8 }, // bare laundry-line posts stay plain
+  deadtree: {}, picnic: {}, hoop: {}, rubble: {}, tarp: {}, tent: {}, cart: {}, mattress: {}, sandbags: {},
+  barricade: { keep: hasMap },
+  // legs scale with the tower height, the tank keeps most of its girth so short roof towers don't turn into pucks
+  watertower: { stretch: (o) => { const sy = ((o.h || 6) + 4) / 10; const sx = 0.55 + 0.45 * sy; return [sx, sy, sx]; } },
+  statue: { when: (o) => !o.horse, keep: hasMap, yOffset: (o) => o.h || 2.2 }, // the figure only; the concrete pedestal stays
 };
 const PROPS = {
   car(x, z, rot, o, rng) {
@@ -625,8 +644,8 @@ const PROPS = {
     for (let i = 0; i < 6; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 6), col(rng.pick(['#e74c3c', '#f1c40f', '#2ecc71', '#e67e22', '#9b59b6']))); f.position.set(rng.float(-1.2, 1.2), 1.0, rng.float(-0.5, 0.5)); g.add(f); }
     this.group.add(g); this._collide(x, 0, z, 3, 1.0, 1.4, rot);
   },
-  tent(x, z, rot, o, rng) { const color = o.color || rng.pick(['#2a5a8a', '#7a7a7a', '#3a6a3a', '#8a6a2a']); const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; const t = new THREE.Mesh(new THREE.ConeGeometry(1.3, 1.5, 4), col(color, 0.95)); t.rotation.y = Math.PI / 4; t.position.y = 0.75; t.scale.set(1.2, 1, 1); t.castShadow = true; g.add(t); this.group.add(g); this._collide(x, 0, z, 2.0, 1.3, 1.6, rot, { walkable: false }); },
-  tarp(x, z, rot, o, rng) { const color = o.color || rng.pick(['#2a5a8a', '#4a4a4a', '#8a7a4a']); const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; const pm = col('#444'); for (const [px, pz] of [[-1.2, -1], [1.2, -1], [-1.2, 1], [1.2, 1]]) { const p = new THREE.Mesh(chamferBox(0.08, 2.2, 0.08), pm); p.position.set(px, 1.1, pz); g.add(p); } const r = new THREE.Mesh(chamferBox(3, 0.05, 2.6), col(color, 0.95)); r.position.y = 2.2; r.rotation.z = 0.08; r.castShadow = true; g.add(r); const b = new THREE.Mesh(chamferBox(1.2, 0.5, 2.0), col('#3a2a2a')); b.position.set(-0.5, 0.25, 0); g.add(b); this.group.add(g); this._collide(x - Math.cos(rot) * 0.5, 0, z + Math.sin(rot) * 0.5, 1.2, 0.5, 2.0, rot); },
+  tent(x, z, rot, o, rng) { const color = o.color || rng.pick(['#2a5a8a', '#7a7a7a', '#3a6a3a', '#8a6a2a']); const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; g.userData.tint = color; const t = new THREE.Mesh(new THREE.ConeGeometry(1.3, 1.5, 4), col(color, 0.95)); t.rotation.y = Math.PI / 4; t.position.y = 0.75; t.scale.set(1.2, 1, 1); t.castShadow = true; g.add(t); this.group.add(g); this._collide(x, 0, z, 2.0, 1.3, 1.6, rot, { walkable: false }); },
+  tarp(x, z, rot, o, rng) { const color = o.color || rng.pick(['#2a5a8a', '#4a4a4a', '#8a7a4a']); const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; g.userData.tint = color; const pm = col('#444'); for (const [px, pz] of [[-1.2, -1], [1.2, -1], [-1.2, 1], [1.2, 1]]) { const p = new THREE.Mesh(chamferBox(0.08, 2.2, 0.08), pm); p.position.set(px, 1.1, pz); g.add(p); } const r = new THREE.Mesh(chamferBox(3, 0.05, 2.6), col(color, 0.95)); r.position.y = 2.2; r.rotation.z = 0.08; r.castShadow = true; g.add(r); const b = new THREE.Mesh(chamferBox(1.2, 0.5, 2.0), col('#3a2a2a')); b.position.set(-0.5, 0.25, 0); g.add(b); this.group.add(g); this._collide(x - Math.cos(rot) * 0.5, 0, z + Math.sin(rot) * 0.5, 1.2, 0.5, 2.0, rot); },
   statue(x, z, rot, o, rng) {
     const pm = mat('concrete', { color: o.pedestal || '#8a8680', seed: 41 }); const h = o.h || 2.2;
     this.box({ x, z, w: 2.4, h: h * 0.3, d: 2.4, m: pm }); this.box({ x, y: h * 0.3, z, w: 1.6, h: h * 0.7, d: 1.6, m: pm });

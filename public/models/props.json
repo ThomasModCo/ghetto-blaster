@@ -8,6 +8,15 @@
    0.631
   ]
  },
+ "barricade": {
+  "file": "models/prop_barricade.glb",
+  "tint": true,
+  "size": [
+   2.4,
+   1.1,
+   0.7
+  ]
+ },
  "bench": {
   "file": "models/prop_bench.glb",
   "tint": false,
@@ -53,6 +62,15 @@
    4.4
   ]
  },
+ "cart": {
+  "file": "models/prop_cart.glb",
+  "tint": false,
+  "size": [
+   0.931,
+   1.3,
+   1.051
+  ]
+ },
  "cone": {
   "file": "models/prop_cone.glb",
   "tint": false,
@@ -78,6 +96,15 @@
    1,
    1,
    1
+  ]
+ },
+ "deadtree": {
+  "file": "models/prop_deadtree.glb",
+  "tint": false,
+  "size": [
+   4.336,
+   5,
+   2.141
   ]
  },
  "driveby": {
@@ -116,6 +143,15 @@
    10
   ]
  },
+ "hoop": {
+  "file": "models/prop_hoop.glb",
+  "tint": false,
+  "size": [
+   1.9,
+   3.9,
+   2
+  ]
+ },
  "hydrant": {
   "file": "models/prop_hydrant.glb",
   "tint": false,
@@ -141,6 +177,15 @@
    2,
    1.35,
    5.4
+  ]
+ },
+ "mattress": {
+  "file": "models/prop_mattress.glb",
+  "tint": false,
+  "size": [
+   1.4,
+   0.3,
+   2
   ]
  },
  "nest": {
@@ -179,6 +224,51 @@
    1.125
   ]
  },
+ "picnic": {
+  "file": "models/prop_picnic.glb",
+  "tint": false,
+  "size": [
+   1.8,
+   0.8,
+   1.6
+  ]
+ },
+ "planter": {
+  "file": "models/prop_planter.glb",
+  "tint": false,
+  "size": [
+   2.4,
+   1.15,
+   1
+  ]
+ },
+ "pole": {
+  "file": "models/prop_pole.glb",
+  "tint": false,
+  "size": [
+   1.8,
+   8,
+   0.5
+  ]
+ },
+ "rubble": {
+  "file": "models/prop_rubble.glb",
+  "tint": false,
+  "size": [
+   3.2,
+   0.8,
+   3.2
+  ]
+ },
+ "sandbags": {
+  "file": "models/prop_sandbags.glb",
+  "tint": false,
+  "size": [
+   2.8,
+   0.9,
+   0.5
+  ]
+ },
  "stall": {
   "file": "models/prop_stall.glb",
   "tint": true,
@@ -186,6 +276,33 @@
    2.667,
    3.125,
    1.781
+  ]
+ },
+ "statue": {
+  "file": "models/prop_statue.glb",
+  "tint": false,
+  "size": [
+   1.581,
+   3,
+   1.107
+  ]
+ },
+ "tarp": {
+  "file": "models/prop_tarp.glb",
+  "tint": true,
+  "size": [
+   3,
+   2.3,
+   2.6
+  ]
+ },
+ "tent": {
+  "file": "models/prop_tent.glb",
+  "tint": true,
+  "size": [
+   2.2,
+   1.4,
+   1.8
   ]
  },
  "tires": {
@@ -249,6 +366,15 @@
    2.1,
    2.2,
    5.2
+  ]
+ },
+ "watertower": {
+  "file": "models/prop_watertower.glb",
+  "tint": false,
+  "size": [
+   3.8,
+   10,
+   3.8
   ]
  }
 }
