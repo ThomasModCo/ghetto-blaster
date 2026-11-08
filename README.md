@@ -1,5 +1,13 @@
 # Ghetto Blaster
 
+> **Toy reskin.** This fork restyles the game as plastic street-crew toy figures fighting across miniature
+> playset dioramas on a table: generated 3D figures, guns, props and streak units, a procedural playset building
+> kit, miniature-painted textures, cap-gun effects and a plastic UI. Gameplay is unchanged: colliders, random draws
+> and the Director's planned outcomes are identical to the original (`node scripts/sim-match.mjs tdm 4` and
+> `node scripts/smoke-map.mjs <map>` check it).
+> Forked from [arifialkov/ghetto-blaster](https://github.com/arifialkov/ghetto-blaster).
+> Hosted builds pack the `.glb` models into `models/pack.json` (`node scripts/pack-models.mjs dist`).
+
 A hood-themed first-person shooter that runs in the browser on desktop and mobile as a PWA.
 Seven maps based on real cities, three modes (Team Deathmatch, Free For All, Gun Game),
 five stock loadouts plus three custom slots, and 15 score streaks per map.
