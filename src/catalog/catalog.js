@@ -18,6 +18,7 @@ await loadModels('../').catch((e) => console.warn('models unavailable', e));
 const items = buildRegistry();
 const byId = new Map(items.map((it) => [it.id, it]));
 const state = { q: '', cat: 'All', sort: 'category', dir: 1, view: 'grid', rendered: 0, mapsDone: 0, usageReady: false };
+window.__cat = { items, studio, state }; // used by scripts/capture-asset-library.mjs (before/after library)
 try { Object.assign(state, JSON.parse(localStorage.getItem('gb.catalog') || '{}'), { q: '', rendered: 0, mapsDone: 0, usageReady: false }); } catch (e) { /* ignore */ }
 const saveUi = () => { try { localStorage.setItem('gb.catalog', JSON.stringify({ cat: state.cat, sort: state.sort, dir: state.dir, view: state.view })); } catch (e) { /* ignore */ } };
 
