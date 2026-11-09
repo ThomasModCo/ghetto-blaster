@@ -290,3 +290,6 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; color: #fff; 
 /* the old blink faded to 12% and left a ghosted outline; a gentle pulse reads as molded lettering */
 .title-cta { animation: ctaPulse 1.8s ease-in-out infinite; }
 @keyframes ctaPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.97); } }
+
+/* mode cards: illustrated 2D art (public/ui/mode-*.jpg) — shown as drawn, framed from the top */
+.mode-panel .mode-art { filter: none; background-position: center 20%; }
