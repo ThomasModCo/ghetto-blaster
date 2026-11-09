@@ -226,4 +226,4 @@ window.addEventListener('pointerdown', () => initAudio(), { once: true });
 
 window.__gb = { app, engine, input, hud, save, padNav };
 // generated 3D models load before the first scene is built; on failure the procedural box models are used
-loadModels('./').catch((e) => console.warn('models unavailable, using procedural models', e)).finally(() => { enterTitle(); updatePadPrompts(); });
+loadModels('./', { lowTextures: settings.quality === 'low' }).catch((e) => console.warn('models unavailable, using procedural models', e)).finally(() => { enterTitle(); updatePadPrompts(); });

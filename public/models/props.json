@@ -376,5 +376,12 @@
    10,
    3.8
   ]
+ },
+ "_atlas": {
+  "file": "models/props-atlas.webp",
+  "low": "models/props-atlas-low.webp",
+  "w": 4096,
+  "h": 2048,
+  "density": 42.7
  }
 }
