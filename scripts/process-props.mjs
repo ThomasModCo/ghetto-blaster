@@ -28,9 +28,9 @@ const OUT = process.argv[3] || 'public/models'; fs.mkdirSync(OUT, { recursive: t
 export const PROPS = {
   car: { size: [1.9, 1.65, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true },
   van: { size: [2.1, 2.2, 5.2], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true },
-  truck: { size: [2.4, 3.2, 7.65], fit: 'xyz', exact: true, long: 'z', tris: 1900, tint: true },
-  bus: { size: [2.6, 3.4, 11], fit: 'xyz', exact: true, long: 'z', tris: 2200, tint: true },
-  container: { size: [6, 2.6, 2.4], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true },
+  truck: { size: [2.4, 3.2, 7.65], fit: 'xyz', exact: true, long: 'z', tris: 1900, tint: true , texScale: 0.8 },
+  bus: { size: [2.6, 3.4, 11], fit: 'xyz', exact: true, long: 'z', tris: 2200, tint: true , texScale: 0.8 },
+  container: { size: [6, 2.6, 2.4], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true , texScale: 0.7 },
   dumpster: { size: [2.0, 1.5, 1.3], fit: 'xyz', exact: true, long: 'x', tris: 1000, tint: true },
   phonebooth: { size: [0.9, 2.4, 0.9], fit: 'y', long: null, tris: 800, tint: true, greyBody: true },
   busstop: { size: [3.6, 2.7, 1.6], fit: 'x', long: 'x', tris: 1000, gain: 0.55 },
@@ -44,27 +44,44 @@ export const PROPS = {
   bench: { size: [1.8, 0.95, 0.8], fit: 'x', cap: 1.6, long: 'x', tris: 800 },
   lamp: { size: [0.5, 6.2, 1.9], fit: 'y', cap: 0, long: 'z', tris: 600, anchor: 'base', arm: true, gain: 0.5 },
   hydrant: { size: [0.6, 1.0, 0.6], fit: 'y', cap: 0, long: null, tris: 600, gain: 0.75 },
-  tree: { size: [3.2, 5.4, 3.2], fit: 'y', cap: 0, long: null, tris: 1200, anchor: 'base', gain: 0.72, sat: 0.55 },
-  palm: { size: [3.5, 9.0, 3.5], fit: 'y', cap: 0, long: null, tris: 1000, anchor: 'base', gain: 0.75 },
+  tree: { size: [3.2, 5.4, 3.2], fit: 'y', cap: 0, long: null, tris: 1200, anchor: 'base', gain: 0.72, sat: 0.55 , texScale: 0.8 },
+  palm: { size: [3.5, 9.0, 3.5], fit: 'y', cap: 0, long: null, tris: 1000, anchor: 'base', gain: 0.75 , texScale: 0.7 },
   cone: { size: [0.5, 0.7, 0.5], fit: 'y', long: null, tris: 250 },
   trashpile: { size: [1.9, 1.0, 1.9], fit: 'xz', cap: 1.6, long: null, tris: 800 },
   // second batch of map props
   planter: { size: [2.4, 1.15, 1.0], fit: 'xyz', exact: true, long: 'x', tris: 900 },
-  pole: { size: [1.8, 8, 0.5], fit: 'xyz', exact: true, long: 'x', tris: 700, gain: 0.7, sat: 0.45 },
-  deadtree: { size: [3.2, 5.0, 3.2], fit: 'y', cap: 0, long: null, tris: 1000, anchor: 'base', gain: 0.85 },
+  pole: { size: [1.8, 8, 0.5], fit: 'xyz', exact: true, long: 'x', tris: 700, gain: 0.7, sat: 0.45 , texScale: 0.6 },
+  deadtree: { size: [3.2, 5.0, 3.2], fit: 'y', cap: 0, long: null, tris: 1000, anchor: 'base', gain: 0.85 , texScale: 0.7 },
   picnic: { size: [1.8, 0.8, 1.6], fit: 'xyz', exact: true, long: 'x', tris: 800 },
   hoop: { size: [1.9, 3.9, 2.0], fit: 'xyz', exact: true, long: 'z', tris: 900, anchor: 'base', arm: true },
   barricade: { size: [2.4, 1.1, 0.7], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true },
-  watertower: { size: [3.8, 10, 3.8], fit: 'xyz', exact: true, long: null, tris: 1500, gain: 0.85 },
-  rubble: { size: [3.2, 0.8, 3.2], fit: 'xyz', exact: true, long: null, tris: 900, gain: 0.28 },
+  watertower: { size: [3.8, 10, 3.8], fit: 'xyz', exact: true, long: null, tris: 1500, gain: 0.85 , texScale: 0.55 },
+  rubble: { size: [3.2, 0.8, 3.2], fit: 'xyz', exact: true, long: null, tris: 900, gain: 0.28 , texScale: 0.7 },
   tarp: { size: [3.0, 2.3, 2.6], fit: 'xyz', exact: true, long: 'x', tris: 1100, tint: true },
   tent: { size: [2.2, 1.4, 1.8], fit: 'xyz', exact: true, long: 'x', tris: 800, tint: true },
   cart: { size: [0.9, 1.3, 1.1], fit: 'y', cap: 1.6, long: 'z', tris: 900 },
   mattress: { size: [1.4, 0.3, 2.0], fit: 'xyz', exact: true, long: 'z', tris: 500 },
   sandbags: { size: [2.8, 0.9, 0.5], fit: 'xyz', exact: true, long: 'x', tris: 900 },
   statue: { size: [1.4, 3.0, 1.2], fit: 'y', cap: 0, long: null, tris: 2000 },
+  // third batch: the remaining fixed-shape props
+  shirt: { size: [0.5, 0.75, 0.08], fit: 'xyz', exact: true, long: 'x', tris: 300, tint: true, greyBody: true },
+  bollard: { size: [0.28, 0.9, 0.28], fit: 'xyz', exact: true, long: null, tris: 300 },
+  billboard: { size: [10, 11.75, 1.2], fit: 'xyz', exact: true, long: 'x', tris: 1600 , texScale: 0.35 },
+  ac: { size: [0.8, 0.6, 0.6], fit: 'xyz', exact: true, long: 'x', tris: 500 },
+  pallet: { size: [1.2, 0.14, 1.0], fit: 'xyz', exact: true, long: 'x', tris: 400 },
+  pipes: { size: [5, 1.2, 1.3], fit: 'xyz', exact: true, long: 'x', tris: 900 },
+  bush: { size: [1.6, 1.4, 1.6], fit: 'xyz', exact: true, long: null, tris: 900 },
+  antenna: { size: [1.2, 4, 0.4], fit: 'y', cap: 0, long: 'x', tris: 600, anchor: 'base' },
+  barrier: { size: [3, 0.9, 0.55], fit: 'xyz', exact: true, long: 'x', tris: 500 },
+  shrine: { size: [1.6, 3.0, 1.1], fit: 'xyz', exact: true, long: 'x', tris: 1500 },
+  dish: { size: [1.0, 1.0, 1.0], fit: 'y', long: null, tris: 800 },
+  fountain: { size: [8, 3.8, 8], fit: 'xyz', exact: true, long: null, tris: 2000 , texScale: 0.7 },
+  obelisk: { size: [3, 10.85, 3], fit: 'xyz', exact: true, long: null, tris: 600 , texScale: 0.5 },
+  grave: { size: [1.2, 1.9, 0.4], fit: 'xyz', exact: true, long: 'x', tris: 600 },
+  tomb: { size: [2.8, 2.9, 3.6], fit: 'xyz', exact: true, long: 'z', tris: 900 , texScale: 0.8 },
+  horsestatue: { size: [1.4, 4.0, 2.8], fit: 'z', long: 'z', tris: 2500 },
   // streak units (not map props: spawned by match.js; same pipeline)
-  heli: { size: [2.6, 3.2, 10], fit: 'z', cap: 0, long: 'z', tris: 2600, thickFront: true, gain: 0.5 },
+  heli: { size: [2.6, 3.2, 10], fit: 'z', cap: 0, long: 'z', tris: 2600, thickFront: true, gain: 0.5 , texScale: 0.75 },
   lowrider: { size: [2.0, 1.35, 5.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true },
   driveby: { size: [1.9, 1.75, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true },
   nest: { size: [2.4, 1.0, 2.2], fit: 'xz', cap: 1.6, long: 'x', tris: 1600, yaw: 180, darkGreys: 0.35 },
@@ -182,9 +199,11 @@ function shelfPack(rects) {
   for (const i of order) { const r = rects[i]; if (x + r.w > AW) { x = 0; y += rowH + GAP; rowH = 0; } if (y + r.h > AH || r.w > AW) return null; out[i] = { x, y }; x += r.w + GAP; rowH = Math.max(rowH, r.h); }
   return out;
 }
-let density = Math.sqrt((AW * AH * 0.62) / items.reduce((s, it) => s + it.area, 0)), placed = null;
+// texScale: relative texel density for props whose surfaces are big, plain or far away (billboard backs, monuments)
+const TS = (it) => it.P.texScale ?? 1;
+let density = Math.sqrt((AW * AH * 0.62) / items.reduce((s, it) => s + it.area * TS(it) ** 2, 0)), placed = null;
 for (let tries = 0; tries < 30 && !placed; tries++) {
-  for (const it of items) it.uw = unwrap(it.pos, it.idx, density);
+  for (const it of items) it.uw = unwrap(it.pos, it.idx, density * TS(it));
   placed = shelfPack(items.map((it) => ({ w: it.uw.w, h: it.uw.h })));
   if (!placed) density *= 0.95;
 }
@@ -199,7 +218,7 @@ for (let n = 0; n < items.length; n++) {
   // source texture, pre-shrunk to about twice the target density so sampling it doesn't alias
   let srcArea = 0; { const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(); for (let i = 0; i < src.idx.length; i += 3) { A.fromArray(src.pos, src.idx[i] * 3); B.fromArray(src.pos, src.idx[i + 1] * 3); C.fromArray(src.pos, src.idx[i + 2] * 3); srcArea += B.sub(A).cross(C.sub(A)).length() / 2; } }
   for (const T of src.tex) if (T.data) {
-    const srcDensity = Math.sqrt((T.W * T.H * 0.7) / srcArea), f = Math.min(1, (2.2 * density) / srcDensity);
+    const srcDensity = Math.sqrt((T.W * T.H * 0.7) / srcArea), f = Math.min(1, (2.2 * density * TS(it)) / srcDensity);
     if (f < 0.98) { const W2 = Math.max(16, Math.round(T.W * f)), H2 = Math.max(16, Math.round(T.H * f)); const { data, info } = await sharp(T.raw).removeAlpha().resize(W2, H2, { kernel: 'lanczos3' }).raw().toBuffer({ resolveWithObject: true }); T.data = data; T.W = info.width; T.H = info.height; }
     // linear float copy
     T.lin = new Float32Array(T.W * T.H * 3); for (let i = 0; i < T.lin.length; i++) T.lin[i] = s2l(T.data[i] / 255);
@@ -329,7 +348,7 @@ for (const it of items) {
   const fb = bbox(doc);
   await doc.transform(prune({ keepAttributes: true }), dedup(), quantize({ quantizePosition: 12, quantizeTexcoord: 14 }), meshopt({ encoder: MeshoptEncoder, level: 'high' }));
   const file = `prop_${id}.glb`; await io.write(path.join(OUT, file), doc);
-  manifest[id] = { file: `models/${file}`, tint: !!P.tint, size: fb.sz.map((v) => +v.toFixed(3)) };
+  manifest[id] = { file: `models/${file}`, tint: !!P.tint, size: fb.sz.map((v) => +v.toFixed(3)), rect: [rect.x, rect.y, rect.w, rect.h] };
   console.log(id.padEnd(12), String(it.tris).padStart(5), 'tris', (fs.statSync(path.join(OUT, file)).size / 1024).toFixed(0).padStart(4), 'KB', 'tex', `${rect.w}x${rect.h}`, it.body ? 'body ' + it.body.toFixed(2) : '');
 }
 // atlas: full size and a half-size copy for low quality (WebP keeps the alpha tint mask)

@@ -338,7 +338,7 @@ export class MapBuilder {
   prop(type, o = {}) {
     const { x = 0, z = 0, rot = 0 } = o; const rng = this.rng;
     const P = PROPS[type]; if (!P) { console.warn('unknown prop', type); return; }
-    const G = GLB_PROPS[type], tpl = G && (!G.when || G.when(o)) && MODELS.props.get(type);
+    const G = GLB_PROPS[type], tpl = G && (!G.when || G.when(o)) && MODELS.props.get(G.model ? G.model(o) : type);
     if (!tpl) { P.call(this, x, z, rot, o, rng); return; }
     // Run the original builder into a throwaway group: it makes exactly the same RNG draws, colliders, lights and
     // landmarks as before, so layouts, nav and pre-planned outcomes can't change. Then show the generated mesh instead,
@@ -346,6 +346,7 @@ export class MapBuilder {
     const real = this.group, tmp = new THREE.Group(), nLights = this.lights.length; this.group = tmp;
     try { P.call(this, x, z, rot, o, rng); } finally { this.group = real; }
     tmp.updateMatrixWorld(true);
+    if (G.custom) { G.custom.call(this, tmp, tpl, o); return; }
     const m = new THREE.Mesh(tpl.geo, propMaterial(tpl.tint ? propTint(tmp) : null));
     const k = G.scale ? G.scale(tmp, o) : 1, off = G.offset || [0, 0, 0];
     m.scale.setScalar(k); m.rotation.y = rot;
@@ -538,7 +539,33 @@ const GLB_PROPS = {
   barricade: { keep: hasMap },
   // legs scale with the tower height, the tank keeps most of its girth so short roof towers don't turn into pucks
   watertower: { stretch: (o) => { const sy = ((o.h || 6) + 4) / 10; const sx = 0.55 + 0.45 * sy; return [sx, sy, sx]; } },
-  statue: { when: (o) => !o.horse, keep: hasMap, yOffset: (o) => o.h || 2.2 }, // the figure only; the concrete pedestal stays
+  statue: { model: (o) => (o.horse ? 'horsestatue' : 'statue'), keep: hasMap, yOffset: (o) => o.h || 2.2 }, // the figure only; the concrete pedestal stays
+  // third batch: the rest of the fixed-shape props
+  bollard: {}, pallet: {}, shrine: {}, grave: {}, tomb: {}, dish: {},
+  barrier: { stretchX: (tmp, o) => (o.len || 3) / 3 },
+  pipes: { stretchX: (tmp, o) => (o.len || 5) / 5 },
+  ac: { yOffset: (o) => (o.y ? 0 : 2.4) }, // the old box sat at 2.4 m when no height was given
+  antenna: { scale: (tmp, o) => (o.h || 4) / 4 },
+  bush: { scale: (tmp) => firstMesh(tmp).geometry.parameters.radius }, // the random size the old builder drew
+  fountain: { stretch: (o) => [(o.r || 4) / 4, 1, (o.r || 4) / 4] }, // molded water replaces the old transparent disc
+  obelisk: { stretch: (o) => [1, ((o.h || 9) + 1.85) / 10.85, 1] },
+  // the generated pole, frame and catwalk; the advert itself stays the original sticker board in front
+  billboard: { keep: hasMap, stretch: (o) => { const w = o.w || 10; return [w / 10, ((o.h || 8) + w * 0.375) / 11.75, w / 10]; },
+    // slide the frame back so its blank panel sits just behind the sticker board (whose back face is at -0.1)
+    head(tpl, m) {
+      if (tpl.panelFront === undefined) { const a = tpl.geo.attributes.position, H = tpl.geo.boundingBox.max.y; let z = -1e9; for (let i = 0; i < a.count; i++) { const y = a.getY(i); if (y > H * 0.8 && y < H * 0.95) z = Math.max(z, a.getZ(i)); } tpl.panelFront = z; }
+      const back = tpl.panelFront * m.scale.z + 0.13; m.position.x -= Math.sin(m.rotation.y) * back; m.position.z -= Math.cos(m.rotation.y) * back;
+    } },
+  // laundry: the line stays; every cloth becomes a molded shirt in that cloth's colour (same RNG draws, same spacing)
+  laundry: { model: () => 'shirt', custom(tmp, tpl) {
+    const cloth = []; tmp.traverse((c) => { if (c.isMesh) cloth.push(c); });
+    for (const c of cloth) {
+      c.getWorldPosition(c.position); c.getWorldQuaternion(c.quaternion);
+      if (c.geometry.type !== 'PlaneGeometry') { c.removeFromParent(); this.group.add(c); continue; }
+      const m = new THREE.Mesh(tpl.geo, propMaterial('#' + c.material.color.getHexString()));
+      m.position.copy(c.position); m.position.y += 0.39 - 0.75; m.quaternion.copy(c.quaternion); m.castShadow = true; this.group.add(m);
+    }
+  } },
 };
 const PROPS = {
   car(x, z, rot, o, rng) {
