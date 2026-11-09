@@ -1,5 +1,7 @@
-/* Ghetto Blaster service worker: cache-first for the app shell, network-first for navigation. */
-const CACHE = 'ghetto-blaster-v2';
+/* Ghetto Blaster service worker: network-first for navigation and for files whose names don't change between builds
+   (models, prop atlas, JSON, card art), so an update never mixes new data with stale cached models; cache-first for
+   the content-hashed build assets. */
+const CACHE = 'ghetto-blaster-v3';
 const CORE = ['./', './index.html', './manifest.json', './icons/icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -24,6 +26,13 @@ self.addEventListener('fetch', (e) => {
       caches.open(CACHE).then((c) => c.put(req, copy));
       return res;
     }).catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html'))));
+    return;
+  }
+  if (/\/(models|ui|icons)\//.test(url.pathname) || url.pathname.endsWith('.json')) {
+    e.respondWith(fetch(req).then((res) => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+      return res;
+    }).catch(() => caches.match(req)));
     return;
   }
   e.respondWith(
