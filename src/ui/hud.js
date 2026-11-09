@@ -7,6 +7,9 @@ import { streakIcon } from './icons.js';
 const $ = (id) => document.getElementById(id);
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
+// glossy molded bar: green, amber under half, red under a quarter
+const healthFill = (f) => f > 0.5 ? 'linear-gradient(180deg,#9ff7a8,#45c95c 55%,#25913b)' : f > 0.25 ? 'linear-gradient(180deg,#ffe08a,#f2a91e 55%,#b06f08)' : 'linear-gradient(180deg,#ff9a8a,#e8473a 55%,#9b2018)';
+
 export class HUD {
   constructor() {
     this.el = $('hud'); this.mm = $('minimap'); this.ctx = this.mm.getContext('2d');
@@ -75,7 +78,7 @@ export class HUD {
   }
   updateText() {
     const m = this.m, p = m.player, w = p.weapon;
-    $('health-bar').style.width = `${(p.health / p.maxHealth) * 100}%`; $('health-bar').style.background = p.armor > 0 ? 'linear-gradient(90deg,#60a5fa,#a5f3fc)' : p.fx.jugg > 0 ? '#ffd166' : 'linear-gradient(90deg,#ef4444,#4ade80)';
+    $('health-bar').style.width = `${(p.health / p.maxHealth) * 100}%`; $('health-bar').style.background = p.armor > 0 ? 'linear-gradient(180deg,#c9f2ff,#6fc7f5 55%,#2f86c4)' : p.fx.jugg > 0 ? 'linear-gradient(180deg,#ffe58a,#f2b41e 60%,#b07a08)' : healthFill(p.health / p.maxHealth);
     $('hud-weapon').textContent = w.def.name + (m.mode.id === 'gungame' ? ` (${p.gunGameIndex + 1}/${m.mode.gunCount})` : '');
     $('ammo-mag').textContent = w.def.mag > 1000 ? '∞' : w.mag; $('ammo-res').textContent = w.def.mag > 1000 ? '' : `/ ${w.reserve}`; $('ammo-mag').parentElement.classList.toggle('low', w.mag <= Math.max(3, w.def.mag * 0.2));
     const el = p.equip.lethal, et = p.equip.tactical;
