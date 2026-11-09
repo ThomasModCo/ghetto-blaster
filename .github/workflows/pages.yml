@@ -23,6 +23,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # the before/after asset library ships next to the game: <site>/asset-library/
+      - run: cp -r docs/asset-library dist/asset-library
       - uses: actions/configure-pages@v5
         with:
           enablement: true
