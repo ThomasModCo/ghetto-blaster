@@ -26,24 +26,24 @@ const OUT = process.argv[3] || 'public/models'; fs.mkdirSync(OUT, { recursive: t
 // long: 'z' | 'x' (axis the longest horizontal side should lie on); yaw: extra turn after orienting (radians);
 // tris: decimation budget; tint: grey body is normalised to white for per-placement colour.
 export const PROPS = {
-  car: { size: [1.9, 1.65, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true },
-  van: { size: [2.1, 2.2, 5.2], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true },
-  truck: { size: [2.4, 3.2, 7.65], fit: 'xyz', exact: true, long: 'z', tris: 1900, tint: true , texScale: 0.8 },
-  bus: { size: [2.6, 3.4, 11], fit: 'xyz', exact: true, long: 'z', tris: 2200, tint: true , texScale: 0.8 },
-  container: { size: [6, 2.6, 2.4], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true , texScale: 0.7 },
-  dumpster: { size: [2.0, 1.5, 1.3], fit: 'xyz', exact: true, long: 'x', tris: 1000, tint: true },
-  phonebooth: { size: [0.9, 2.4, 0.9], fit: 'y', long: null, tris: 800, tint: true, greyBody: true },
+  car: { size: [1.9, 1.65, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true , key: true},
+  van: { size: [2.1, 2.2, 5.2], fit: 'xyz', exact: true, long: 'z', tris: 1600, tint: true , key: true},
+  truck: { size: [2.4, 3.2, 7.65], fit: 'xyz', exact: true, long: 'z', tris: 1900, tint: true , texScale: 0.8 , key: true},
+  bus: { size: [2.6, 3.4, 11], fit: 'xyz', exact: true, long: 'z', tris: 2200, tint: true , texScale: 0.8 , key: true},
+  container: { size: [6, 2.6, 2.4], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true , texScale: 0.7 , key: true},
+  dumpster: { size: [2.0, 1.5, 1.3], fit: 'xyz', exact: true, long: 'x', tris: 1000, tint: true , key: true},
+  phonebooth: { size: [0.9, 2.4, 0.9], fit: 'y', long: null, tris: 800, tint: true , key: true},
   busstop: { size: [3.6, 2.7, 1.6], fit: 'x', long: 'x', tris: 1000, gain: 0.55 },
-  newsstand: { size: [2.8, 2.6, 1.9], fit: 'xyz', exact: true, long: 'x', tris: 1000, tint: true },
+  newsstand: { size: [2.8, 2.6, 1.9], fit: 'xyz', exact: true, long: 'x', tris: 1000, tint: true , key: true},
   stall: { size: [3.4, 2.5, 1.9], fit: 'x', long: 'x', tris: 1300, tint: true },
   tires: { size: [1.1, 1.3, 1.1], fit: 'y', long: null, tris: 900, gain: 0.32 },
   trafficlight: { size: [0.6, 5.6, 4.0], fit: 'y', cap: 0, long: 'z', tris: 800, anchor: 'base', arm: true, gain: 0.5 },
-  trashcan: { size: [0.75, 1.05, 0.75], fit: 'y', long: null, tris: 600, gain: 0.62 },
-  barrel: { size: [0.66, 0.92, 0.66], fit: 'y', long: null, tris: 450, tint: true },
+  trashcan: { size: [0.75, 1.05, 0.75], fit: 'y', long: null, tris: 600 },
+  barrel: { size: [0.66, 0.92, 0.66], fit: 'y', long: null, tris: 450, tint: true , key: true},
   crate: { size: [1, 1, 1], fit: 'xyz', exact: true, long: null, tris: 450 },
   bench: { size: [1.8, 0.95, 0.8], fit: 'x', cap: 1.6, long: 'x', tris: 800 },
   lamp: { size: [0.5, 6.2, 1.9], fit: 'y', cap: 0, long: 'z', tris: 600, anchor: 'base', arm: true, gain: 0.5 },
-  hydrant: { size: [0.6, 1.0, 0.6], fit: 'y', cap: 0, long: null, tris: 600, gain: 0.75 },
+  hydrant: { size: [0.6, 1.0, 0.6], fit: 'y', cap: 0, long: null, tris: 600 },
   tree: { size: [3.2, 5.4, 3.2], fit: 'y', cap: 0, long: null, tris: 1200, anchor: 'base', gain: 0.72, sat: 0.55 , texScale: 0.8 },
   palm: { size: [3.5, 9.0, 3.5], fit: 'y', cap: 0, long: null, tris: 1000, anchor: 'base', gain: 0.75 , texScale: 0.7 },
   cone: { size: [0.5, 0.7, 0.5], fit: 'y', long: null, tris: 250 },
@@ -54,11 +54,11 @@ export const PROPS = {
   deadtree: { size: [3.2, 5.0, 3.2], fit: 'y', cap: 0, long: null, tris: 1000, anchor: 'base', gain: 0.85 , texScale: 0.7 },
   picnic: { size: [1.8, 0.8, 1.6], fit: 'xyz', exact: true, long: 'x', tris: 800 },
   hoop: { size: [1.9, 3.9, 2.0], fit: 'xyz', exact: true, long: 'z', tris: 900, anchor: 'base', arm: true },
-  barricade: { size: [2.4, 1.1, 0.7], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true },
+  barricade: { size: [2.4, 1.1, 0.7], fit: 'xyz', exact: true, long: 'x', tris: 700, tint: true , key: true},
   watertower: { size: [3.8, 10, 3.8], fit: 'xyz', exact: true, long: null, tris: 1500, gain: 0.85 , texScale: 0.55 },
   rubble: { size: [3.2, 0.8, 3.2], fit: 'xyz', exact: true, long: null, tris: 900, gain: 0.28 , texScale: 0.7 },
   tarp: { size: [3.0, 2.3, 2.6], fit: 'xyz', exact: true, long: 'x', tris: 1100, tint: true },
-  tent: { size: [2.2, 1.4, 1.8], fit: 'xyz', exact: true, long: 'x', tris: 800, tint: true },
+  tent: { size: [2.2, 1.4, 1.8], fit: 'xyz', exact: true, long: 'x', tris: 800, tint: true , key: true},
   cart: { size: [0.9, 1.3, 1.1], fit: 'y', cap: 1.6, long: 'z', tris: 900 },
   mattress: { size: [1.4, 0.3, 2.0], fit: 'xyz', exact: true, long: 'z', tris: 500 },
   sandbags: { size: [2.8, 0.9, 0.5], fit: 'xyz', exact: true, long: 'x', tris: 900 },
@@ -81,12 +81,12 @@ export const PROPS = {
   tomb: { size: [2.8, 2.9, 3.6], fit: 'xyz', exact: true, long: 'z', tris: 900 , texScale: 0.8 },
   horsestatue: { size: [1.4, 4.0, 2.8], fit: 'z', long: 'z', tris: 2500 },
   // streak units (not map props: spawned by match.js; same pipeline)
-  heli: { size: [2.6, 3.2, 10], fit: 'z', cap: 0, long: 'z', tris: 2600, thickFront: true, gain: 0.5 , texScale: 0.75 },
-  lowrider: { size: [2.0, 1.35, 5.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true },
-  driveby: { size: [1.9, 1.75, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true },
-  nest: { size: [2.4, 1.0, 2.2], fit: 'xz', cap: 1.6, long: 'x', tris: 1600, yaw: 180, darkGreys: 0.35 },
+  heli: { size: [2.6, 3.2, 10], fit: 'z', cap: 0, long: 'z', tris: 2600, thickFront: true , texScale: 0.75 },
+  lowrider: { size: [2.0, 1.35, 5.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true , key: true},
+  driveby: { size: [1.9, 1.75, 4.4], fit: 'xyz', exact: true, long: 'z', tris: 2000, tint: true , key: true},
+  nest: { size: [2.4, 1.0, 2.2], fit: 'xz', cap: 1.6, long: 'x', tris: 1600, yaw: 180 },
   gator: { size: [0.9, 0.5, 2.3], fit: 'z', cap: 0, long: 'z', tris: 1800, thickFront: true, yaw: 180, gain: 0.55, sat: 0.8 },
-  brass: { size: [1.7, 1.9, 0.9], fit: 'y', cap: 1.6, long: 'x', tris: 2400, tint: true, greyBody: true },
+  brass: { size: [1.7, 1.9, 0.9], fit: 'y', cap: 1.6, long: 'x', tris: 2400, tint: true , key: true},
 };
 const YAW = JSON.parse(process.env.YAW || '{}'); // per-prop extra turn in degrees, decided by looking at renders
 
@@ -282,7 +282,27 @@ for (let n = 0; n < items.length; n++) {
   // the paint), and mask the texels that are then bright and neutral. Everything else keeps its colour, just brightened.
   let body = null; const mask = new Uint8Array(w * h), G = P.gain ?? 1;
   const grade = (c) => { for (let i = 0; i < 3; i++) c[i] *= G; if (P.sat !== undefined) { const l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; for (let i = 0; i < 3; i++) c[i] = l + (c[i] - l) * P.sat; } };
-  if (P.tint) {
+  if (P.tint && P.key) {
+    // painted-miniature source (2026-11-10): the paintable body was painted in a magenta key colour. Keyed texels become
+    // a neutral shade (wash and highlights kept) and take the placement colour; everything else keeps its paint as is.
+    const vs = [], hueA = new Float32Array(w * h).fill(999), satA = new Float32Array(w * h);
+    for (let k = 0; k < w * h; k++) {
+      if (!covered(k)) continue; const c = col.subarray(k * 3, k * 3 + 3), s = [l2s(c[0]), l2s(c[1]), l2s(c[2])];
+      const mx = Math.max(...s), mn = Math.min(...s), sat = mx > 0 ? (mx - mn) / mx : 0; let hue = 0;
+      if (mx - mn > 1e-5) { if (mx === s[0]) hue = ((s[1] - s[2]) / (mx - mn)) % 6; else if (mx === s[1]) hue = (s[2] - s[0]) / (mx - mn) + 2; else hue = (s[0] - s[1]) / (mx - mn) + 4; hue *= 60; if (hue < 0) hue += 360; }
+      const wk = (1 - ss(32, 52, Math.abs(hue - 305))) * ss(0.16, 0.3, sat) * ss(0.06, 0.14, mx); hueA[k] = Math.abs(hue - 305); satA[k] = sat;
+      mask[k] = wk > 0.5 ? 1 : 0; if (mask[k]) vs.push(mx);
+    }
+    // grow into the anti-aliased fringe: pinkish texels next to the key (two passes)
+    for (let pass = 0; pass < 2; pass++) { const add = []; for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const k = y * w + x; if (mask[k] || !covered(k) || hueA[k] > 70 || satA[k] < 0.08) continue; if (mask[k - 1] || mask[k + 1] || mask[k - w] || mask[k + w]) add.push(k); } for (const k of add) { mask[k] = 1; vs.push(Math.max(l2s(col[k * 3]), l2s(col[k * 3 + 1]), l2s(col[k * 3 + 2]))); } }
+    vs.sort((x, y) => x - y); const ref = vs.length ? vs[Math.floor(vs.length * 0.85)] : 1; body = ref;
+    for (let k = 0; k < w * h; k++) {
+      if (!covered(k)) continue; const c = col.subarray(k * 3, k * 3 + 3);
+      if (mask[k]) { const v = Math.max(l2s(c[0]), l2s(c[1]), l2s(c[2])); const g = s2l(Math.min(1, (v / ref) * 0.88)); c[0] = c[1] = c[2] = g; }
+      grade(c);
+    }
+    if (process.env.MASKDBG) { let on = 0, n = 0; for (let k = 0; k < w * h; k++) if (covered(k)) { on += mask[k]; n++; } console.log('KEY', it.id, 'on', (on / n).toFixed(2)); }
+  } else if (P.tint) {
     const mxs = []; for (let k = 0; k < w * h; k++) if (covered(k)) mxs.push(Math.max(col[k * 3], col[k * 3 + 1], col[k * 3 + 2]));
     mxs.sort((x, y) => x - y); const bright = mxs[Math.floor(mxs.length * 0.55)];
     const ch = [[], [], []];
@@ -305,7 +325,7 @@ for (let n = 0; n < items.length; n++) {
   if (P.tint) for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const k = y * w + x; if (!covered(k)) continue; let s = 0, c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const kk = k + dy * w + dx; if (covered(kk)) { s += mask[kk]; c++; } } mask2[k] = s * 2 > c ? 1 : 0; }
   // molded plastic: the paintable body is smooth, so blur away the source's grime and grain inside the mask
   // (a 7x7 box over masked texels only: panel gaps, trim and decals sit outside the mask and stay sharp)
-  if (P.tint) {
+  if (P.tint && !P.key) {
     const R = 3, sm = new Float32Array(col);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const k = y * w + x; if (!mask2[k]) continue; let r = 0, g2 = 0, b2 = 0, c = 0;

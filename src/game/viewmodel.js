@@ -1,6 +1,6 @@
 // First-person view model: gun + hands parented to the camera, with sway, bob, ADS, sprint, reload and recoil.
 import * as THREE from 'three';
-import { buildGunMesh, plasticMat } from './character.js';
+import { buildGunMesh, matteMat } from './character.js';
 import { damp, lerp, clamp } from '../core/rng.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -17,7 +17,7 @@ const handGeo = () => HG || (HG = {
   cuff: new THREE.TorusGeometry(0.049, 0.011, 8, 18),
 });
 const UP = new THREE.Vector3(0, 1, 0);
-function toyHand(skin, sleeve, { pos, rx = 0, ry = 0, rz = 0, armDir, thumbSide = 1 }) {
+function toyHand(skin, sleeve, { cuffMat = sleeve, pos, rx = 0, ry = 0, rz = 0, armDir, thumbSide = 1 }) {
   const G = handGeo(), g = new THREE.Group(); g.position.copy(pos);
   const hand = new THREE.Group(); hand.rotation.set(rx, ry, rz, 'YXZ'); g.add(hand);
   [0.03, 0.01, -0.01, -0.03].forEach((y, i) => {
@@ -33,7 +33,7 @@ function toyHand(skin, sleeve, { pos, rx = 0, ry = 0, rz = 0, armDir, thumbSide 
   const seg = (geo, mat, from, len) => { const m = new THREE.Mesh(geo, mat); m.quaternion.copy(q); m.scale.set(1, len, 1); m.position.copy(wrist).addScaledVector(dir, from + len / 2); g.add(m); return m; };
   seg(G.arm, skin, -0.01, 0.14);
   seg(G.sleeve, sleeve, 0.12, 0.6);
-  const cuff = new THREE.Mesh(G.cuff, sleeve); cuff.quaternion.copy(q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+  const cuff = new THREE.Mesh(G.cuff, cuffMat); cuff.quaternion.copy(q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
   cuff.position.copy(wrist).addScaledVector(dir, 0.125); g.add(cuff);
   g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
   return g;
@@ -41,14 +41,17 @@ function toyHand(skin, sleeve, { pos, rx = 0, ry = 0, rz = 0, armDir, thumbSide 
 
 
 export class ViewModel {
-  constructor(camera, { plastic = '#1e4fc0' } = {}) {
+  constructor(camera, { plastic = '#1e4fc0', skin = null, bareArms = false } = {}) {
     this.camera = camera;
     this.root = new THREE.Group(); camera.add(this.root);
     this.pivot = new THREE.Group(); this.root.add(this.pivot); // recoil / reload offsets
     this.gunHolder = new THREE.Group(); this.gunHolder.rotation.y = Math.PI; this.pivot.add(this.gunHolder); // gun models point +Z; camera looks down -Z
     this.gun = null; this.weapon = null;
-    // view-model lights are tuned for dark metal guns, so the plastic is molded a shade darker here to match the world
-    this.plastic = plastic; this.vmShade = 0.9; this.skinMat = plasticMat(plastic, this.vmShade, 0.3); this.sleeveMat = plasticMat(plastic, this.vmShade * 0.88, 0.34);
+    // painted miniature hands: the player's figure's skin tone, the sleeve (or a wristband on bare arms) in the crew colour.
+    // View-model lights are tuned for dark metal guns, so everything is painted a shade darker here to match the world.
+    this.plastic = plastic; this.vmShade = 0.9;
+    this.skinMat = matteMat(skin || '#7b4b2f', this.vmShade).clone(); this.sleeveMat = matteMat(plastic, this.vmShade * 0.88).clone();
+    this.cuffMat = this.sleeveMat; if (bareArms) this.sleeveMat = this.skinMat;
     this.hands = new THREE.Group(); this.gunHolder.add(this.hands);
     this.sway = new THREE.Vector2(); this.kick = 0; this.kickRot = 0; this.adsBlend = 0; this.sprintBlend = 0; this.reloadBlend = 0; this.swapT = 0; this.bob = new THREE.Vector2();
     this.root.renderOrder = 10;
@@ -63,13 +66,13 @@ export class ViewModel {
     // right hand on the grip, left hand under the fore-end (pistols: left hand cups the right at the grip).
     // gun space: +Z toward the muzzle, and gun -X is screen right (the holder is turned 180deg).
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
-    this.hands.add(toyHand(this.skinMat, this.sleeveMat, { pos: V(-0.005, -h / 2 - 0.07, len * 0.2 - 0.01), rx: -0.22, armDir: V(-0.28, -0.42, -1), thumbSide: 1 }));
-    if (d.pistol) this.hands.add(toyHand(this.skinMat, this.sleeveMat, { pos: V(0.035, -h / 2 - 0.1, len * 0.2 + 0.012), rx: -0.12, rz: 0.35, armDir: V(0.6, -0.5, -1), thumbSide: -1 }));
+    this.hands.add(toyHand(this.skinMat, this.sleeveMat, { cuffMat: this.cuffMat, pos: V(-0.005, -h / 2 - 0.07, len * 0.2 - 0.01), rx: -0.22, armDir: V(-0.28, -0.42, -1), thumbSide: 1 }));
+    if (d.pistol) this.hands.add(toyHand(this.skinMat, this.sleeveMat, { cuffMat: this.cuffMat, pos: V(0.035, -h / 2 - 0.1, len * 0.2 + 0.012), rx: -0.12, rz: 0.35, armDir: V(0.6, -0.5, -1), thumbSide: -1 }));
     else {
       // the generated gun meshes don't follow the old box profile, so find the real underside of the fore-end
       const z = Math.min(len * 0.62, len - 0.06); let y = -h / 2 + 0.005;
       const under = this._underside(z); if (under !== null) y = under + 0.024;
-      this.hands.add(toyHand(this.skinMat, this.sleeveMat, { pos: V(0.004, y, z), rx: -Math.PI / 2, rz: 0.15, armDir: V(0.95, -0.55, -0.75), thumbSide: -1 }));
+      this.hands.add(toyHand(this.skinMat, this.sleeveMat, { cuffMat: this.cuffMat, pos: V(0.004, y, z), rx: -Math.PI / 2, rz: 0.15, armDir: V(0.95, -0.55, -0.75), thumbSide: -1 }));
     }
     this.swapT = 0.35;
   }
@@ -124,6 +127,6 @@ export class ViewModel {
     rot.y += this.sway.x * 1.5 * (1 - ads * 0.5); rot.x += this.sway.y * 1.5 * (1 - ads * 0.5) + this.kickRot; rot.z += (st.lean || 0) * 0.06;
     this.root.position.copy(pos); this.root.rotation.set(rot.x, rot.y, rot.z);
   }
-  setColors(skin, sleeve) { this.skinMat.color.set(skin); this.sleeveMat.color.set(sleeve); }
+  setColors(skin, sleeve) { this.skinMat.color.set(skin).multiplyScalar(this.vmShade); this.cuffMat.color.set(sleeve).multiplyScalar(this.vmShade * 0.88); }
 }
 const h2 = (d) => d.h / 2;

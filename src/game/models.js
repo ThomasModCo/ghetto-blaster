@@ -1,5 +1,5 @@
 // Generated 3D models (toy reskin). Figures are auto-rigged skinned meshes, guns and the dog are static meshes,
-// all untextured: the game paints them with its own plastic material. Everything is optional: if loading fails
+// painted miniatures with their own texture (older untextured builds get the game's plastic material). Everything is optional: if loading fails
 // (or in the headless Node scripts, where nothing is loaded) the procedural box models are used instead.
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -15,7 +15,8 @@ export function propMaterial(tint) {
   const key = tint || 'none'; if (_propMats.has(key)) return _propMats.get(key);
   // one shared atlas for every generated prop (scripts/process-props.mjs); its alpha is the tint mask:
   // 255 = molded body that takes the placement colour, ~150 = keeps its own colour (tyres, glass, wood, fruit)
-  const m = new THREE.MeshStandardMaterial({ color: tint || '#ffffff', map: MODELS.propAtlas, roughness: 0.5, metalness: 0.02 });
+  // matte, like painted miniature scenery (was a 0.5 molded-plastic sheen before the painted pass)
+  const m = new THREE.MeshStandardMaterial({ color: tint || '#ffffff', map: MODELS.propAtlas, roughness: 0.82, metalness: 0 });
   m.userData.prop = true;
   m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\n vec4 propTexel = texture2D( map, vMapUv );\n diffuseColor.rgb = mix( propTexel.rgb, propTexel.rgb * diffuseColor.rgb, smoothstep( 0.78, 0.95, propTexel.a ) );\n#endif'); };
   m.customProgramCacheKey = () => 'playset-prop-atlas';
@@ -69,11 +70,13 @@ export async function loadModels(base = './', opts = {}) {
       return [f, u8.buffer];
     }));
   }
+  // painted models carry their own base-colour texture (see scripts/process-painted.mjs): keep it for paintedMat
+  const mapOf = (s) => { let t = null; s.traverse((o) => { if (!t && o.isMesh && o.material && o.material.map) t = o.material.map; }); if (t) t.anisotropy = 4; return t; };
   const load = (file) => (packed ? loader.parseAsync(packed.get(file), '') : loader.loadAsync(new URL(file, root).href)).then((g) => g.scene);
   const jobs = [];
-  for (const [key, f] of Object.entries(manifest.figures || {})) jobs.push(load(f.file).then((s) => MODELS.figures.set(key, s)));
-  for (const [id, g] of Object.entries(manifest.guns || {})) jobs.push(load(g.file).then((s) => MODELS.guns.set(id, { scene: s, muzzle: g.muzzle })));
-  if (manifest.dog) jobs.push(load(manifest.dog.file).then((s) => { MODELS.dog = s; MODELS.dogCollar = dogCollar(s); }));
+  for (const [key, f] of Object.entries(manifest.figures || {})) jobs.push(load(f.file).then((s) => { s.userData.paint = mapOf(s); MODELS.figures.set(key, s); }));
+  for (const [id, g] of Object.entries(manifest.guns || {})) jobs.push(load(g.file).then((s) => MODELS.guns.set(id, { scene: s, muzzle: g.muzzle, map: mapOf(s) })));
+  if (manifest.dog) jobs.push(load(manifest.dog.file).then((s) => { MODELS.dog = s; MODELS.dogMap = mapOf(s); MODELS.dogCollar = dogCollar(s); }));
   // playset props (cars, dumpsters, trees...): optional, the map builder falls back to its procedural props
   const props = await fetch(new URL('models/props.json', root)).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
   if (props._atlas) {

@@ -1,5 +1,7 @@
 // Procedural humanoid rig + gun meshes. No external models; everything is boxes with a simple joint hierarchy.
-// Toy reskin: every figure, gun and throwable is molded in ONE solid glossy plastic colour (team, FFA slot or faction).
+// Toy reskin, painted-miniature pass: generated figures, guns and the dog are hand-painted matte minis (Meshy textures).
+// A figure's main garment is painted in a key colour that the game swaps for the team / FFA slot / faction colour, so
+// teams still read at a glance. Box fallbacks, throwables and armour plates are plain matte paint in that colour.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { MODELS, figureKey, propMaterial } from './models.js';
@@ -32,6 +34,33 @@ export function plasticMat(c, shade = 1, rough = 0.32) {
   }
   return plasticCache.get(k);
 }
+const paintedCache = new Map();
+/** Painted miniature: the model's own texture, matte. Texels with alpha 0 (the figure's key garment) are multiplied by
+ *  `tint`; everything else keeps its paint. `shade` darkens the whole thing (first-person view model). */
+export function paintedMat(map, tint = null, shade = 1) {
+  const k = (map ? map.uuid : 'none') + '|' + (tint || '-') + '|' + shade;
+  if (!paintedCache.has(k)) {
+    const m = new THREE.MeshStandardMaterial({ map, color: new THREE.Color(shade, shade, shade), roughness: 0.82, metalness: 0 });
+    const uTint = { value: new THREE.Color(tint || '#ffffff') };
+    m.userData.painted = true; m.userData.tint = uTint;
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTint = uTint;
+      sh.fragmentShader = 'uniform vec3 uTint;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\n vec4 paintTexel = texture2D( map, vMapUv );\n diffuseColor.rgb *= mix( paintTexel.rgb * uTint, paintTexel.rgb, smoothstep( 0.35, 0.65, paintTexel.a ) );\n#endif');
+    };
+    m.customProgramCacheKey = () => 'painted-mini';
+    paintedCache.set(k, m);
+  }
+  return paintedCache.get(k);
+}
+const matteCache = new Map();
+/** Plain matte paint (armour plates, collars, throwables, box fallbacks next to painted figures). */
+export function matteMat(c, shade = 1) {
+  const k = c + '|' + shade;
+  if (!matteCache.has(k)) { const col = new THREE.Color(c); if (shade !== 1) col.multiplyScalar(shade); matteCache.set(k, new THREE.MeshStandardMaterial({ color: col, roughness: 0.8, metalness: 0 })); }
+  return matteCache.get(k);
+}
+/** Painted skin tone of each generated figure (first-person hands match the player's own figure). */
+export const FIGURE_SKIN = { hood: '#7b4b2f', cap: '#b9875f', bandana: '#4f2f1d', hitman: '#d9ac8a', sicario: '#1d1d20', cop: '#4b2c1c' };
 const rbCache = new Map();
 /** Soft-edged box so parts read as molded rather than voxel. */
 function rbGeo(w, h, d) {
@@ -52,7 +81,8 @@ export function buildGunMesh(w, plastic = DEFAULT_GUN_PLASTIC, shade = 1) {
   const body = plasticMat(plastic, shade, 0.3), metal = plasticMat(plastic, 0.78 * shade, 0.36);
   const gen = MODELS.guns.get(w.id);
   if (gen) { // generated mesh, pre-oriented barrel +Z and sized to this weapon's dimensions
-    const m = gen.scene.clone(); m.traverse((o) => { if (o.isMesh) { o.material = body; o.castShadow = true; } }); g.add(m);
+    const mat = gen.map ? paintedMat(gen.map, null, shade) : body;
+    const m = gen.scene.clone(); m.traverse((o) => { if (o.isMesh) { o.material = mat; o.castShadow = true; } }); g.add(m);
     g.userData.muzzle = new THREE.Vector3(...gen.muzzle); g.userData.pistol = !!d.pistol; return g;
   }
   const h = d.h, len = d.len;
@@ -85,7 +115,7 @@ export function buildGunMesh(w, plastic = DEFAULT_GUN_PLASTIC, shade = 1) {
 }
 
 export function buildThrowableMesh(eq, plastic = DEFAULT_GUN_PLASTIC) {
-  const pm = plasticMat(plastic, 1, 0.3), pd = plasticMat(plastic, 0.78, 0.36);
+  const pm = matteMat(plastic, 1), pd = matteMat(plastic, 0.78);
   if (eq.shape === 'can') { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.12, 10), pm); return m; }
   if (eq.shape === 'ball') { const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), pm); return m; }
   if (eq.shape === 'axe') { const g = new THREE.Group(); g.add(bx(0.02, 0.02, 0.4, pd, 0, 0, 0)); g.add(bx(0.03, 0.14, 0.1, pm, 0, 0.06, 0.15)); return g; }
@@ -153,8 +183,11 @@ export class CharacterModel {
     this.shadowOnly = false;
     // generated skinned figure: the box rig stays as the (invisible) animation driver
     const tpl = MODELS.figures.get(figureKey(faction, hat));
-    this.armorMat = P(1).clone(); this.armorMat.color.multiplyScalar(0.45); this.armorMat.roughness = 0.55; // Trap House Armor plates: same plastic, molded darker
-    if (tpl) { const fig = new Figure(tpl, P(1), s); if (fig.ok) { this.group.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = fig; this.group.add(fig.root); } }
+    this.skinTone = FIGURE_SKIN[figureKey(faction, hat)] || FIGURE_SKIN.hood;
+    const painted = tpl && tpl.userData.paint;
+    // Trap House Armor plates: the crew colour, painted darker (molded darker on unpainted figures)
+    this.armorMat = painted ? matteMat(base, 0.45) : P(1).clone(); if (!painted) { this.armorMat.color.multiplyScalar(0.45); this.armorMat.roughness = 0.55; }
+    if (tpl) { const fig = new Figure(tpl, painted ? paintedMat(tpl.userData.paint, base) : P(1), s); if (fig.ok) { this.group.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = fig; this.group.add(fig.root); } }
   }
   setGun(weapon) {
     if (this.gunMesh) { this.gunMount.remove(this.gunMesh); }
@@ -249,9 +282,9 @@ export class CharacterModel {
       this.dogLegs = gallopMaterial(propMaterial(null)); const gm = new THREE.Mesh(gt.geo, this.dogLegs.material(gt.geo)); gm.castShadow = true; gm.position.y = -0.55; this.torso.add(gm); this.dogBody = gm;
     } else if (MODELS.dog) { // generated dog (static mid-gallop pose): ride it on the torso so the bob and death roll still apply
       this.torso.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = null;
-      const dg = MODELS.dog.clone(); this.dogLegs = gallopMaterial(m); dg.traverse((o) => { if (o.isMesh) { o.material = this.dogLegs.material(o.geometry); o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg);
+      const dg = MODELS.dog.clone(); this.dogLegs = gallopMaterial(MODELS.dogMap ? paintedMat(MODELS.dogMap) : m); dg.traverse((o) => { if (o.isMesh) { o.material = this.dogLegs.material(o.geometry); o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg);
       const c = MODELS.dogCollar; if (c) { // studded collar in the owner's colour
-        const cm = plasticMat(this.plastic || FACTION_PLASTIC.gang, 1, 0.3), col = new THREE.Mesh(new THREE.TorusGeometry(c.r, Math.max(0.018, c.r * 0.16), 8, 20), cm);
+        const cm = (MODELS.dogMap ? matteMat : plasticMat)(this.plastic || FACTION_PLASTIC.gang, 1, 0.3), col = new THREE.Mesh(new THREE.TorusGeometry(c.r, Math.max(0.018, c.r * 0.16), 8, 20), cm);
         col.position.set(c.x, c.y - 0.55, c.z); col.rotation.x = 0.35; col.castShadow = true; this.torso.add(col);
         for (let i = 0; i < 6; i++) { const a = -Math.PI * 0.15 + (i / 5) * Math.PI * 1.3; const st = new THREE.Mesh(new THREE.SphereGeometry(c.r * 0.11, 6, 4), cm); st.position.set(Math.cos(a) * c.r * 1.12, Math.sin(a) * c.r * 1.12, 0); col.add(st); }
       }

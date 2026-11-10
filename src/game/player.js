@@ -23,7 +23,7 @@ export class Player extends Actor {
     this.leanDir = 0;
     this.aimPoint = new THREE.Vector3();
     this.sensitivity = 1;
-    this.view = new ViewModel(match.engine.vmCamera, { plastic: this.model.plastic });
+    this.view = new ViewModel(match.engine.vmCamera, { plastic: this.model.plastic, skin: this.model.skinTone, bareArms: this.model.hat === 'bandana' });
     this.view.setWeapon(this.weapon.def);
     this.model.setVisible(false); // first person: own body hidden while alive
     this.lastLook = { dx: 0, dy: 0 };
