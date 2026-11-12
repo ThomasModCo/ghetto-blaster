@@ -85,7 +85,7 @@ export class Engine {
     sun.shadow.camera.left = -sz; sun.shadow.camera.right = sz; sun.shadow.camera.top = sz; sun.shadow.camera.bottom = -sz;
     sun.shadow.camera.near = 10; sun.shadow.camera.far = 300; sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.03;
     sun.userData.env = true; s.add(sun); s.add(sun.target); sun.target.userData.env = true;
-    this.sun = sun; this.hemi = hemi;
+    this.sun = sun; this.hemi = hemi; this._sunDir = null;
     const amb = new THREE.AmbientLight(new THREE.Color(env.ambient || '#404048').lerp(new THREE.Color('#ffffff'), 0.2), Math.min(1.1, Math.max(0.6, (env.ambientIntensity ?? 0.25) * 2.4))); amb.userData.env = true; s.add(amb);
     this.vmHemi.color.set(env.hemiSky).lerp(new THREE.Color('#ffffff'), 0.35); this.vmHemi.groundColor.copy(hemiGround).lerp(new THREE.Color('#ffffff'), 0.25); this.vmHemi.intensity = Math.max(1.8, hemiI) * VM_PLASTIC;
     this.vmSun.color.set(env.sunColor); this.vmSun.intensity = Math.min(2.6, Math.max(1.6, (env.sunIntensity ?? 2) * 0.9 + 0.4)) * VM_PLASTIC; this.vmFill.color.set(env.hemiSky).lerp(new THREE.Color('#ffffff'), 0.6); this.vmSunDir = new THREE.Vector3(env.sunDir[0], env.sunDir[1], env.sunDir[2]).normalize();
@@ -108,7 +108,17 @@ export class Engine {
     for (const slot of this.mapPool) { if (!slot.def) continue; slot.cur += (slot.target - slot.cur) * Math.min(1, dt * 6); slot.l.intensity = slot.cur; if (slot.target === 0 && slot.cur < 0.03) { slot.def = null; slot.cur = 0; slot.l.intensity = 0; slot.l.position.set(0, -200, 0); } }
   }
   // keep the shadow frustum centered on the camera target
-  updateSunTarget(p) { if (!this.sun) return; const o = this.sun.position.clone().normalize(); this.sun.position.copy(p).addScaledVector(o, 120); this.sun.target.position.copy(p); this.sun.target.updateMatrixWorld(); }
+  // Snapped to whole shadow-map texels in the light's own frame: a frustum that slides continuously makes every shadow
+  // edge (trees, fences, buildings on the grass) shimmer as the player moves.
+  updateSunTarget(p) {
+    if (!this.sun) return;
+    const sh = this.sun.shadow, o = this._sunDir || (this._sunDir = this.sun.position.clone().sub(this.sun.target.position).normalize());
+    const texel = (sh.camera.right - sh.camera.left) / sh.mapSize.x;
+    const x = (this._sunX || (this._sunX = new THREE.Vector3())).crossVectors(this.sun.up, o).normalize(), y = (this._sunY || (this._sunY = new THREE.Vector3())).crossVectors(o, x);
+    const q = this._sunP || (this._sunP = new THREE.Vector3()); q.copy(p);
+    const px = q.dot(x), py = q.dot(y); q.addScaledVector(x, Math.round(px / texel) * texel - px).addScaledVector(y, Math.round(py / texel) * texel - py);
+    this.sun.position.copy(q).addScaledVector(o, 120); this.sun.target.position.copy(q); this.sun.target.updateMatrixWorld();
+  }
   /** Compile every shader variant up front so the first shots/explosions don't hitch. */
   warmup() {
     const p = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(0, 0, 1);

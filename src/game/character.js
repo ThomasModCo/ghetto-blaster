@@ -34,6 +34,7 @@ export function plasticMat(c, shade = 1, rough = 0.32) {
   }
   return plasticCache.get(k);
 }
+const TP_GUN_SCALE = 0.75;
 const paintedCache = new Map();
 /** Painted miniature: the model's own texture, matte. Texels with alpha 0 (the figure's key garment) are multiplied by
  *  `tint`; everything else keeps its paint. `shade` darkens the whole thing (first-person view model). */
@@ -186,13 +187,21 @@ export class CharacterModel {
     this.skinTone = FIGURE_SKIN[figureKey(faction, hat)] || FIGURE_SKIN.hood;
     const painted = tpl && tpl.userData.paint;
     // Trap House Armor plates: the crew colour, painted darker (molded darker on unpainted figures)
-    this.armorMat = painted ? matteMat(base, 0.45) : P(1).clone(); if (!painted) { this.armorMat.color.multiplyScalar(0.45); this.armorMat.roughness = 0.55; }
+    // painted: gunmetal-grey plates with the crew colour on the pouches, collar and helmet band
+    this.armorMat = painted ? matteMat('#' + new THREE.Color('#34373b').lerp(new THREE.Color(base), 0.18).getHexString()) : P(1).clone(); if (!painted) { this.armorMat.color.multiplyScalar(0.45); this.armorMat.roughness = 0.55; }
+    this.armorTrim = painted ? matteMat(base, 0.9) : this.armorMat;
     if (tpl) { const fig = new Figure(tpl, painted ? paintedMat(tpl.userData.paint, base) : P(1), s); if (fig.ok) { this.group.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = fig; this.group.add(fig.root); } }
   }
   setGun(weapon) {
-    if (this.gunMesh) { this.gunMount.remove(this.gunMesh); }
+    if (this.gunMesh && this.gunMesh.parent) this.gunMesh.parent.remove(this.gunMesh);
+    this._drop = null;
     this.gunMesh = weapon ? buildGunMesh(weapon, this.plastic) : null;
-    if (this.gunMesh) { this.gunMount.add(this.gunMesh); this.gunIsPistol = !!this.gunMesh.userData.pistol; }
+    if (this.gunMesh) {
+      this.gunMount.add(this.gunMesh); this.gunIsPistol = !!this.gunMesh.userData.pistol;
+      // the gameplay gun sizes were drawn for the box rig; on the painted figures they read oversized. Visual only:
+      // bullets start at the eye, the muzzle only places tracers and flashes (grips scale with the gun).
+      if (this.figure) this.gunMesh.scale.setScalar(TP_GUN_SCALE);
+    }
     if (weapon) { const d = weapon.model, h = d.h, len = d.len; this.grips = d.pistol
       ? { Right: new THREE.Vector3(0, -h * 0.3 - 0.06, len * 0.25), Left: new THREE.Vector3(0.035, -h * 0.3 - 0.09, len * 0.2), mag: new THREE.Vector3(0, -h * 0.3 - 0.16, len * 0.25) }
       : { Right: new THREE.Vector3(0, -h / 2 - 0.05, len * 0.22), Left: new THREE.Vector3(0, -h * 0.35, Math.min(len * 0.42, len - 0.05)), mag: new THREE.Vector3(0, -h / 2 - 0.2, len * 0.42) }; }
@@ -210,7 +219,10 @@ export class CharacterModel {
       this.hips.position.y = (0.95 - ease * 0.72) * s;
       this.torso.rotation.set(0, 0, 0); this.neck.rotation.set(0, 0, 0);
       this.legL.rotation.x = ease * 0.3; this.legR.rotation.x = -ease * 0.2; this.armL.rotation.x = -ease * 1.2; this.armR.rotation.x = -ease * 0.8; this.armL.rotation.z = ease * 1.2; this.armR.rotation.z = -ease * 0.6;
-      this._melt(); this._applyFigure(st); return;
+      if (this.figure) { // painted figure: settle flat on the ground, let go of the gun, no plastic slump
+        this.hips.position.y = (0.95 - ease * 0.82) * s; this._dropGun(Math.min(1, this.deathT * 2.6));
+      } else this._melt();
+      this._applyFigure(st); return;
     }
     this.deathT = 0;
     this.adsBlend = damp(this.adsBlend, st.ads ? 1 : 0, 14, dt);
@@ -256,9 +268,9 @@ export class CharacterModel {
     this._applyFigure(st);
   }
   _applyFigure(st) {
-    if (this.figure && (st.jugg || this.figure.armor)) this.figure.setArmor(!!st.jugg && !st.dead, this.armorMat);
+    if (this.figure && (st.jugg || this.figure.armor)) this.figure.setArmor(!!st.jugg && !st.dead, this.armorMat, this.armorTrim);
     if (!this.figure) return;
-    const hands = this.gunMesh && this.grips ? { obj: this.gunMesh, Right: this.grips.Right, Left: st.reloading ? this._reloadHand(st) : this.grips.Left } : null;
+    const hands = !st.dead && this.gunMesh && this.grips && !this._drop ? { obj: this.gunMesh, Right: this.grips.Right, Left: st.reloading ? this._reloadHand(st) : this.grips.Left } : null;
     this.figure.apply(this, hands);
   }
   _reloadHand(st) { const v = (this._rh || (this._rh = new THREE.Vector3())).copy(this.grips.mag); v.y += Math.sin((st.reloadT || 0) * 9) * 0.06; return v; }
@@ -284,9 +296,10 @@ export class CharacterModel {
       this.torso.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = null;
       const dg = MODELS.dog.clone(); this.dogLegs = gallopMaterial(MODELS.dogMap ? paintedMat(MODELS.dogMap) : m); dg.traverse((o) => { if (o.isMesh) { o.material = this.dogLegs.material(o.geometry); o.castShadow = true; } }); dg.position.y = -0.55; this.torso.add(dg);
       const c = MODELS.dogCollar; if (c) { // studded collar in the owner's colour
-        const cm = (MODELS.dogMap ? matteMat : plasticMat)(this.plastic || FACTION_PLASTIC.gang, 1, 0.3), col = new THREE.Mesh(new THREE.TorusGeometry(c.r, Math.max(0.018, c.r * 0.16), 8, 20), cm);
+        const cm = MODELS.dogMap ? matteMat(this.plastic || FACTION_PLASTIC.gang, 0.85) : plasticMat(this.plastic || FACTION_PLASTIC.gang, 1, 0.3);
+        const col = new THREE.Mesh(new THREE.TorusGeometry(c.r * (MODELS.dogMap ? 0.96 : 1), MODELS.dogMap ? Math.max(0.011, c.r * 0.085) : Math.max(0.018, c.r * 0.16), 8, 24), cm);
         col.position.set(c.x, c.y - 0.55, c.z); col.rotation.x = 0.35; col.castShadow = true; this.torso.add(col);
-        for (let i = 0; i < 6; i++) { const a = -Math.PI * 0.15 + (i / 5) * Math.PI * 1.3; const st = new THREE.Mesh(new THREE.SphereGeometry(c.r * 0.11, 6, 4), cm); st.position.set(Math.cos(a) * c.r * 1.12, Math.sin(a) * c.r * 1.12, 0); col.add(st); }
+        for (let i = 0; i < 6; i++) { const a = -Math.PI * 0.15 + (i / 5) * Math.PI * 1.3; const st = new THREE.Mesh(new THREE.SphereGeometry(c.r * (MODELS.dogMap ? 0.07 : 0.11), 6, 4), cm); const sr = c.r * (MODELS.dogMap ? 1.02 : 1.12); st.position.set(Math.cos(a) * sr, Math.sin(a) * sr, 0); col.add(st); }
       }
       this.dogBody = dg; }
     this.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
@@ -306,7 +319,23 @@ export class CharacterModel {
   /** Toy death: after the fall the plastic slumps and spreads a little. */
   _melt() { const k = clamp((this.deathT - 0.55) / 1.4, 0, 1), e = k * (2 - k); this.group.scale.set(1 + e * 0.14, 1 - e * 0.32, 1 + e * 0.14); }
   die(dir = 1) { this.dead = true; this.deathDir = dir; this.deathT = 0; }
-  revive() { this.dead = false; this.deathT = 0; this.group.scale.set(1, 1, 1); this.hips.rotation.set(0, 0, 0); this.hips.position.set(0, 0.95 * this.scale, 0); }
+  /** Painted figures drop their gun when they die: it tumbles from the hands to lie flat beside the body. */
+  _dropGun(t) {
+    const g = this.gunMesh; if (!g) return;
+    if (!this._drop) {
+      this.group.updateMatrixWorld(true);
+      const m = new THREE.Matrix4().copy(this.group.matrixWorld).invert().multiply(g.matrixWorld), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+      m.decompose(p, q, sc); g.parent.remove(g); this.group.add(g); g.position.copy(p); g.quaternion.copy(q); g.scale.copy(sc);
+      const side = this.deathDir || 1, s = this.scale;
+      this._drop = { p0: p, q0: q, p1: new THREE.Vector3(-0.55 * s, 0.045 * s, 0.25 * side * s), q1: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.6 * side, Math.PI / 2)) };
+    }
+    const d = this._drop, e = t * t; // falls, accelerating
+    g.position.lerpVectors(d.p0, d.p1, e); g.position.y += Math.sin(t * Math.PI) * 0.08 * this.scale; g.quaternion.slerpQuaternions(d.q0, d.q1, Math.min(1, t * 1.3));
+  }
+  revive() {
+    if (this._drop && this.gunMesh) { const g = this.gunMesh; g.parent && g.parent.remove(g); this.gunMount.add(g); g.position.set(0, 0, 0); g.quaternion.identity(); g.scale.setScalar(this.figure ? TP_GUN_SCALE : 1); }
+    this._drop = null;
+    this.dead = false; this.deathT = 0; this.group.scale.set(1, 1, 1); this.hips.rotation.set(0, 0, 0); this.hips.position.set(0, 0.95 * this.scale, 0); }
   hit() { this.flinch = 1; }
   setVisible(v) { this.group.visible = v; }
   dispose() { this.group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }

@@ -36,6 +36,8 @@ function tiledMaterial(name, params, rx, ry, extra = {}) {
   const n = normalFor(src); if (n) { m.normalMap = n.clone(); m.normalMap.repeat.set(rx, ry); m.normalMap.needsUpdate = true; m.normalScale.set(0.8, 0.8); }
   return m;
 }
+/** Draw priority for flat ground layers (patches, lawns, plazas, roads): higher layers win where they overlap. */
+function groundLayer(y, bump = 0) { return { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -(Math.round(y * 800) + bump * 4) }; }
 const KIT_WINDOW_MAX_Y = 13; // 3D window surrounds only up to ~4 floors
 
 
@@ -78,7 +80,13 @@ export class MapBuilder {
   }
   // flat textured plane on the ground (no collider)
   patch(x, z, w, d, texName, params = {}, y = 0.015, rot = 0) {
-    const m = tiledMaterial(texName, params, w / (params.scale || 6), d / (params.scale || 6));
+    // Ground layers are a centimetre or two apart, which the depth buffer can't separate at a distance, so a polygon
+    // offset ordered by height decides who is on top. Patches at road height (2 cm) were exactly coplanar with the roads
+    // through them and flickered. Visual only (no colliders), and every other layer keeps its order: a park or lot wider
+    // than a street sits just above the roads (Skid Row's square, still under 2.5 cm paths and 3 cm plazas), a thin
+    // strip like Ward's median just below them so the cross streets cut it.
+    if (Math.abs(y - 0.02) < 1e-4) y = Math.min(w, d) >= 12 ? 0.0238 : 0.0165;
+    const m = tiledMaterial(texName, params, w / (params.scale || 6), d / (params.scale || 6), groundLayer(y));
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); mesh.rotation.x = -Math.PI / 2; mesh.rotation.z = rot; mesh.position.set(x, y, z); mesh.receiveShadow = true; this.group.add(mesh);
     this.patches.push({ x, z, w, d, rot, color: params.mmColor || null });
     return mesh;
@@ -104,12 +112,14 @@ export class MapBuilder {
   road(x1, z1, x2, z2, width = 10, { marks = true, sidewalk = true, sidewalkW = 2.2, dashed = true, y = 0.02 } = {}) {
     const dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz), ang = Math.atan2(dx, dz);
     const cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
-    const m = tiledMaterial('asphalt', { seed: 4 }, width / 6, len / 6);
+    // roads go over lawns and courts at the same height; crossing roads alternate by direction so junctions don't fight
+    if (Math.abs(y - 0.02) < 1e-4) y = Math.abs(dx) < Math.abs(dz) ? 0.021 : 0.019; // north-south over east-west: junctions don't flicker
+    const m = tiledMaterial('asphalt', { seed: 4 }, width / 6, len / 6, groundLayer(y));
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, len), m); mesh.rotation.order = 'YXZ'; mesh.rotation.y = ang; mesh.rotation.x = -Math.PI / 2; mesh.position.set(cx, y, cz); mesh.receiveShadow = true; this.group.add(mesh);
     if (marks) {
       const mt = tex('roadMarks', { dashed }).clone(); mt.repeat.set(1, len / 8); mt.needsUpdate = true;
-      const mm = new THREE.Mesh(new THREE.PlaneGeometry(0.7, len), new THREE.MeshStandardMaterial({ map: mt, transparent: true, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }));
-      mm.rotation.order = 'YXZ'; mm.rotation.y = ang; mm.rotation.x = -Math.PI / 2; mm.position.set(cx, y + 0.012, cz); this.group.add(mm);
+      const mm = new THREE.Mesh(new THREE.PlaneGeometry(0.7, len), new THREE.MeshStandardMaterial({ map: mt, transparent: true, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -16 }));
+      mm.rotation.order = 'YXZ'; mm.rotation.y = ang; mm.rotation.x = -Math.PI / 2; mm.position.set(cx, y + 0.0015, cz); this.group.add(mm);
     }
     if (sidewalk) {
       const sm = tiledMaterial('sidewalk', {}, sidewalkW / 4, len / 4);
@@ -474,7 +484,7 @@ export class MapBuilder {
       if (!o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.isPoints || o.isSprite || o.isLine) return;
       const g = o.geometry; if (!g.attributes.position || !g.attributes.normal || !g.attributes.uv) return;
       const m = o.material;
-      const key = [m.type, m.vertexColors ? 'vc' : '', m.userData.prop ? 'prop' : '', m.color?.getHex(), m.roughness, m.metalness, m.map?.uuid || '', m.transparent, m.opacity, m.side, m.emissive?.getHex(), m.emissiveIntensity, m.emissiveMap?.uuid || '', m.depthWrite, m.polygonOffset, m.polygonOffsetFactor, m.blending, o.castShadow ? 'c' : 'n'].join('|');
+      const key = [m.type, m.vertexColors ? 'vc' : '', m.userData.prop ? 'prop' : '', m.color?.getHex(), m.roughness, m.metalness, m.map?.uuid || '', m.transparent, m.opacity, m.side, m.emissive?.getHex(), m.emissiveIntensity, m.emissiveMap?.uuid || '', m.depthWrite, m.polygonOffset, m.polygonOffsetFactor, m.polygonOffsetUnits, m.blending, o.castShadow ? 'c' : 'n'].join('|');
       if (!buckets.has(key)) buckets.set(key, { material: o.material, cast: o.castShadow, geos: [] });
       const gg = g.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.index === null) gg.setIndex([...Array(gg.attributes.position.count).keys()]);
       for (const name of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(name)) gg.deleteAttribute(name);

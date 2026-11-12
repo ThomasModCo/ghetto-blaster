@@ -74,7 +74,24 @@ export class ViewModel {
       const under = this._underside(z); if (under !== null) y = under + 0.024;
       this.hands.add(toyHand(this.skinMat, this.sleeveMat, { cuffMat: this.cuffMat, pos: V(0.004, y, z), rx: -Math.PI / 2, rz: 0.15, armDir: V(0.95, -0.55, -0.75), thumbSide: -1 }));
     }
+    this.adsFit = this._adsFit(d);
     this.swapT = 0.35;
+  }
+  /** Generated guns don't follow the old box profile: aim over the real receiver top, with the stock behind the eye.
+   *  Returns null for pistols, scoped guns and procedural box guns (they keep the old sight maths). */
+  _adsFit(d) {
+    if (d.pistol || !this.gun.children[0] || this.gun.children[0].isMesh) return null;
+    this.gun.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(this.gun.matrixWorld).invert(), m = new THREE.Matrix4(), v = new THREE.Vector3();
+    let rearZ = 0; const pts = [];
+    this.gun.traverse((o) => { if (!o.isMesh) return; m.multiplyMatrices(inv, o.matrixWorld); const a = o.geometry.attributes.position;
+      for (let i = 0; i < a.count; i += 2) { v.fromBufferAttribute(a, i).applyMatrix4(m); pts.push(v.x, v.y, v.z); rearZ = Math.min(rearZ, v.z); } });
+    if (rearZ > -0.1) return null; // no stock to clear
+    // eye over the back of the receiver with the stock behind it; look over everything past the clip distance
+    const eyeZ = Math.max(rearZ + 0.02, -0.04), z0 = eyeZ + 0.075, z1 = d.len * 0.5; let top = -1;
+    for (let i = 0; i < pts.length; i += 3) if (pts[i + 2] > z0 && pts[i + 2] < z1 && Math.abs(pts[i]) < 0.03) top = Math.max(top, pts[i + 1]);
+    // scoped guns too: the modelled lenses are opaque, so aim just over the top like iron sights (FIFTY and CANNON
+    // switch to the scope overlay once fully aimed anyway)
+    return top > -1 ? { sightY: top + 0.006, z: eyeZ } : null;
   }
   /** Lowest surface of the gun mesh at gun-space depth z (null if the ray misses). */
   _underside(z) {
@@ -107,7 +124,7 @@ export class ViewModel {
     const ads = this.adsBlend, spr = this.sprintBlend, rl = this.reloadBlend;
     const sightY = d.pistol ? h2(d) * 0.6 + 0.015 : (d.scope ? h2(d) + 0.035 + d.scope * 0 : h2(d) + 0.015);
     const hipPos = new THREE.Vector3(0.17, -0.19 - (d.pistol ? 0.02 : 0), -0.36 - (d.pistol ? 0 : 0.05));
-    const adsPos = new THREE.Vector3(0, -sightY, -0.28 - (d.pistol ? 0 : 0.08));
+    const fit = this.adsFit, adsPos = fit ? new THREE.Vector3(0, -(fit.sightY ?? sightY), fit.z) : new THREE.Vector3(0, -sightY, -0.28 - (d.pistol ? 0 : 0.08));
     const pos = hipPos.lerp(adsPos, ads);
     const rot = new THREE.Vector3(0, 0, 0);
     // sprint: lower and angle the gun
@@ -126,6 +143,9 @@ export class ViewModel {
     pos.x += this.sway.x * (1 - ads * 0.6) + this.bob.x; pos.y += this.sway.y * (1 - ads * 0.6) + this.bob.y; pos.z += this.kick;
     rot.y += this.sway.x * 1.5 * (1 - ads * 0.5); rot.x += this.sway.y * 1.5 * (1 - ads * 0.5) + this.kickRot; rot.z += (st.lean || 0) * 0.06;
     this.root.position.copy(pos); this.root.rotation.set(rot.x, rot.y, rot.z);
+    // aiming: the stock and cheek riser sit a few cm from the eye; clip them like a real cheek weld does
+    const near = 0.01 + 0.065 * ads * (d.pistol ? 0 : 1);
+    if (this.camera.isPerspectiveCamera && Math.abs(this.camera.near - near) > 1e-4) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
   }
   setColors(skin, sleeve) { this.skinMat.color.set(skin).multiplyScalar(this.vmShade); this.cuffMat.color.set(sleeve).multiplyScalar(this.vmShade * 0.88); }
 }

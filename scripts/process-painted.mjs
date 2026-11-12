@@ -30,11 +30,17 @@ function ext(ps, axis, lo, hi) { let mn = 1e9, mx = -1e9, sy = 0, n = 0; for (co
 const bbox = (ps) => { const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9]; for (const p of ps) for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], p[i]); mx[i] = Math.max(mx[i], p[i]); } return { mn, mx }; };
 
 /** Magenta key -> greyscale garment + alpha mask. Returns the share of texels that were keyed. */
-async function paintTexture(doc, size, keyed) {
+async function paintTexture(doc, size, keyed, soften = false) {
   const root = doc.getRoot(); const tex = root.listTextures()[0]; if (!tex) throw new Error('no texture');
   const src = sharp(Buffer.from(tex.getImage())).resize(size, size, { fit: 'fill' });
   const { data, info } = await src.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   let share = 0;
+  // guns: the dry-brushed silver edges read as zebra stripes in first person, so compress the highlights
+  if (soften) for (let i = 0; i < info.width * info.height; i++) {
+    const r = data[i * 4] / 255, g = data[i * 4 + 1] / 255, b = data[i * 4 + 2] / 255, L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (L <= 0.36) continue; const k = (0.36 + (L - 0.36) * 0.3) / L;
+    data[i * 4] = Math.round(r * k * 255); data[i * 4 + 1] = Math.round(g * k * 255); data[i * 4 + 2] = Math.round(b * k * 255);
+  }
   if (keyed) {
     const n = info.width * info.height, w = new Float32Array(n), val = new Float32Array(n);
     for (let i = 0; i < n; i++) {
@@ -109,7 +115,7 @@ for (const f of fs.readdirSync(RAW).filter((x) => x.endsWith('.glb'))) {
   applyMatrix(doc, M.scaleT(k, tx, ty, tz));
   ps = positions(doc); b = bbox(ps);
   const muzzle = [0, +muzzleY0.toFixed(4), +b.mx[2].toFixed(4)];
-  await paintTexture(doc, d.pistol ? TEX.pistol : TEX.long, false);
+  await paintTexture(doc, d.pistol ? TEX.pistol : TEX.long, false, true);
   const sz = await finish(doc, `gun_${id}.glb`);
   manifest.guns[id] = { file: `models/gun_${id}.glb`, muzzle, flipped: !muzzleAtPlusX, painted: true, bbox: [b.mn.map((v) => +v.toFixed(3)), b.mx.map((v) => +v.toFixed(3))] };
   console.log(id, sz, muzzleAtPlusX ? '+X' : '-X', 'front/back h', front.h.toFixed(2), back.h.toFixed(2));

@@ -293,3 +293,7 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; color: #fff; 
 
 /* mode cards: illustrated 2D art (public/ui/mode-*.jpg) — shown as drawn, framed from the top */
 .mode-panel .mode-art { filter: none; background-position: center 20%; }
+/* phones: the card text sits much higher up the art, so start the dark band earlier */
+@media (max-height: 520px), (max-width: 700px) {
+  .mode-panel .mode-shade { background: linear-gradient(180deg, rgba(8, 10, 14, 0) 24%, rgba(8, 10, 14, 0.72) 46%, rgba(8, 10, 14, 0.94) 66%, rgba(8, 10, 14, 0.97) 100%); }
+}

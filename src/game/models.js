@@ -71,7 +71,16 @@ export async function loadModels(base = './', opts = {}) {
     }));
   }
   // painted models carry their own base-colour texture (see scripts/process-painted.mjs): keep it for paintedMat
-  const mapOf = (s) => { let t = null; s.traverse((o) => { if (!t && o.isMesh && o.material && o.material.map) t = o.material.map; }); if (t) t.anisotropy = 4; return t; };
+  const mapOf = (s) => {
+    let t = null; s.traverse((o) => { if (!t && o.isMesh && o.material && o.material.map) t = o.material.map; }); if (!t) return t;
+    t.anisotropy = 4;
+    // Low quality: half-size figure, gun and dog textures (a quarter of the GPU memory, kinder to phones)
+    if (opts.lowTextures && t.image && t.image.width >= 512 && typeof document !== 'undefined') {
+      const c = document.createElement('canvas'); c.width = t.image.width >> 1; c.height = t.image.height >> 1;
+      c.getContext('2d').drawImage(t.image, 0, 0, c.width, c.height); if (t.image.close) t.image.close(); t.image = c; t.needsUpdate = true;
+    }
+    return t;
+  };
   const load = (file) => (packed ? loader.parseAsync(packed.get(file), '') : loader.loadAsync(new URL(file, root).href)).then((g) => g.scene);
   const jobs = [];
   for (const [key, f] of Object.entries(manifest.figures || {})) jobs.push(load(f.file).then((s) => { s.userData.paint = mapOf(s); MODELS.figures.set(key, s); }));
