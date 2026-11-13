@@ -28,6 +28,40 @@ const SEED_VARIANTS = { brick: 4, concrete: 4, plaster: 4, asphalt: 2, sidewalk:
 // Texture detail follows the quality setting: low halves the miniature wall textures (memory on phones).
 let DETAIL = 'high';
 export function setTextureDetail(q) { DETAIL = q; }
+// Painted surface detail (2026-11-13): tileable greyscale overlays (public/textures/paint-*.webp, generated as painted
+// terrain and made seamless) laid over the procedural paint in 'overlay' mode, so the colours and layouts stay and
+// the surfaces pick up stipple, wash stains and dry-brushing like the painted props. Optional: without the images
+// (Node scripts, a failed load) the textures are exactly as before.
+const PAINT_DETAIL = { concrete: ['masonry', 0.42], plaster: ['masonry', 0.32], facade: ['masonry', 0.28], brick: ['masonry', 0.35], tile: ['masonry', 0.3],
+  sidewalk: ['masonry', 0.4], cobble: ['masonry', 0.3], asphalt: ['asphalt', 0.65, 'overlay'], grass: ['grass', 0.75, 'overlay'], dirt: ['dirt', 0.65, 'overlay'], metal: ['metal', 0.5], corrugated: ['metal', 0.35] };
+const detailImg = {};
+export function loadPaintDetail(root) {
+  if (typeof Image === 'undefined') return Promise.resolve();
+  return Promise.all([...new Set(Object.values(PAINT_DETAIL).map((d) => d[0]))].map((k) => new Promise((res) => {
+    const im = new Image(); im.onload = () => { detailImg[k] = im; res(); }; im.onerror = () => res(); im.src = new URL(`textures/paint-${k}.webp`, root).href;
+  })));
+}
+/** The masonry overlay as a world-space detail texture for plain-colour materials (maps/builder.js), or null. */
+let detailTex = null;
+export function paintDetailTexture() {
+  if (!detailTex && detailImg.masonry) { detailTex = new THREE.Texture(detailImg.masonry); detailTex.wrapS = detailTex.wrapT = THREE.RepeatWrapping; detailTex.colorSpace = THREE.NoColorSpace; detailTex.anisotropy = 4; detailTex.needsUpdate = true; }
+  return detailTex;
+}
+function paintDetail(name, r) {
+  const d = PAINT_DETAIL[name], img = d && detailImg[d[0]]; if (!img) return;
+  // colour: modulate (base x 0.7..1.3 around the detail), which also reaches near-white paint, unlike 'overlay';
+  // height: 'overlay' so the relief picks up the stipple
+  const c = r.c, ctx = c.getContext('2d'), W = c.width, H = c.height;
+  if (d[2] === 'overlay') { // ground: 'overlay' keeps the contrast up on dark asphalt and saturated grass
+    for (const [cv, al] of [[c, d[1]], [r.hc, d[1] * 0.45]]) { if (!cv) continue; const x = cv.getContext('2d'); x.save(); x.globalCompositeOperation = 'overlay'; x.globalAlpha = al; x.drawImage(img, 0, 0, cv.width, cv.height); x.restore(); }
+    return;
+  }
+  const dc = canvas(W, H), dx = dc.getContext('2d'); dx.drawImage(img, 0, 0, W, H);
+  const dd = dx.getImageData(0, 0, W, H).data, im = ctx.getImageData(0, 0, W, H), p = im.data, a = d[1] * 0.85;
+  for (let i = 0; i < p.length; i += 4) { const f = 1 + a * 1.9 * (dd[i] / 255 - 0.5); p[i] = Math.min(255, p[i] * f); p[i + 1] = Math.min(255, p[i + 1] * f); p[i + 2] = Math.min(255, p[i + 2] * f); }
+  ctx.putImageData(im, 0, 0);
+  if (r.hc) { const hx = r.hc.getContext('2d'); hx.save(); hx.globalCompositeOperation = 'overlay'; hx.globalAlpha = d[1] * 0.45; hx.drawImage(img, 0, 0, r.hc.width, r.hc.height); hx.restore(); }
+}
 const normalCache = new Map(), normalOfMap = new WeakMap();
 /** The shared normal map that goes with a miniature colour texture (kept off userData: three.js JSON-copies userData on clone). */
 export function normalFor(map) { return normalOfMap.get(map) || null; }
@@ -37,13 +71,13 @@ const MINI = { facade: [paintFacade, 512, 2.5], brick: [paintBrick, 256, 2.5], c
   asphalt: [paintAsphalt, 256, 1.6], sidewalk: [paintSidewalk, 256, 2], dirt: [paintDirt, 256, 1.6], grass: [paintGrass, 256, 1.2], cobble: [paintCobble, 256, 2.5] };
 export function tex(name, params = {}) {
   if (params.seed !== undefined && SEED_VARIANTS[name]) params = { ...params, seed: ((Math.abs(Math.floor(params.seed)) - 1) % SEED_VARIANTS[name]) + 1 };
-  const key = name + JSON.stringify(params) + (MINI[name] ? DETAIL : '');
+  const key = name + JSON.stringify(params) + (MINI[name] ? DETAIL + (detailImg.masonry ? 'p' : '') : '');
   if (cache.has(key)) return cache.get(key);
   let t;
   if (MINI[name]) {
     const [paint, size, strength] = MINI[name], S = DETAIL === 'low' ? size / 2 : size;
-    const r = paint(params, S); t = finish(r.c, r.repeat);
-    const lk = name + JSON.stringify(Object.fromEntries(Object.entries(params).filter(([k]) => !PAINT_KEYS.has(k)))) + DETAIL;
+    const r = paint(params, S); paintDetail(name, r); t = finish(r.c, r.repeat);
+    const lk = name + JSON.stringify(Object.fromEntries(Object.entries(params).filter(([k]) => !PAINT_KEYS.has(k)))) + DETAIL + (detailImg.masonry ? 'p' : '');
     let n = normalCache.get(lk);
     if (!n) { n = finish(normalFromHeight(r.hc, strength), r.repeat); n.colorSpace = THREE.NoColorSpace; n.name = name + ':normal'; normalCache.set(lk, n); }
     normalOfMap.set(t, n);

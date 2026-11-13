@@ -471,5 +471,56 @@
  "dog": {
   "file": "models/dog.glb",
   "painted": true
+ },
+ "hand": {
+  "file": "models/hand.glb",
+  "wrist": [
+   0.453,
+   -0.886,
+   -0.101
+  ],
+  "grip": [
+   0.05,
+   0.999,
+   0
+  ],
+  "wristDist": 0.427,
+  "tunnel": [
+   -0.194,
+   0.026,
+   0.064
+  ]
+ },
+ "arms": {
+  "hoodie": {
+   "file": "models/arm_hoodie.glb",
+   "mode": "key",
+   "wristR": 0.109,
+   "elbowR": 0.18
+  },
+  "puffer": {
+   "file": "models/arm_puffer.glb",
+   "mode": "key",
+   "wristR": 0.094,
+   "elbowR": 0.186
+  },
+  "suit": {
+   "file": "models/arm_suit.glb",
+   "mode": "key",
+   "wristR": 0.125,
+   "elbowR": 0.182
+  },
+  "camo": {
+   "file": "models/arm_camo.glb",
+   "mode": "paint",
+   "wristR": 0.132,
+   "elbowR": 0.152
+  },
+  "bare": {
+   "file": "models/arm_bare.glb",
+   "mode": "skin",
+   "wristR": 0.121,
+   "elbowR": 0.153
+  }
  }
 }

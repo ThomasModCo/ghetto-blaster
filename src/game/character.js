@@ -4,7 +4,7 @@
 // teams still read at a glance. Box fallbacks, throwables and armour plates are plain matte paint in that colour.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { MODELS, figureKey, propMaterial } from './models.js';
+import { MODELS, figureKey, propMaterial, gripPoints } from './models.js';
 import { Figure } from './figure.js';
 import { clamp, damp } from '../core/rng.js';
 import { SKIN_TONES, HOODIE_COLORS } from './names.js';
@@ -38,9 +38,9 @@ const TP_GUN_SCALE = 0.75;
 const paintedCache = new Map();
 /** Painted miniature: the model's own texture, matte. Texels with alpha 0 (the figure's key garment) are multiplied by
  *  `tint`; everything else keeps its paint. `shade` darkens the whole thing (first-person view model). */
-export function paintedMat(map, tint = null, shade = 1) {
+export function paintedMat(map, tint = null, shade = 1, shared = true) {
   const k = (map ? map.uuid : 'none') + '|' + (tint || '-') + '|' + shade;
-  if (!paintedCache.has(k)) {
+  if (!shared || !paintedCache.has(k)) {
     const m = new THREE.MeshStandardMaterial({ map, color: new THREE.Color(shade, shade, shade), roughness: 0.82, metalness: 0 });
     const uTint = { value: new THREE.Color(tint || '#ffffff') };
     m.userData.painted = true; m.userData.tint = uTint;
@@ -49,6 +49,7 @@ export function paintedMat(map, tint = null, shade = 1) {
       sh.fragmentShader = 'uniform vec3 uTint;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\n vec4 paintTexel = texture2D( map, vMapUv );\n diffuseColor.rgb *= mix( paintTexel.rgb * uTint, paintTexel.rgb, smoothstep( 0.35, 0.65, paintTexel.a ) );\n#endif');
     };
     m.customProgramCacheKey = () => 'painted-mini';
+    if (!shared) return m; // an own copy (its tint can change without touching anyone else's)
     paintedCache.set(k, m);
   }
   return paintedCache.get(k);
@@ -61,6 +62,15 @@ export function matteMat(c, shade = 1) {
   return matteCache.get(k);
 }
 /** Painted skin tone of each generated figure (first-person hands match the player's own figure). */
+// gripping fists (figure.js setFists): the fist's longest side in metres at figure scale 1, and which gun axis each
+// fist's handle runs along (gun space: y up the pistol grip, z along the fore-end)
+const N = (x, y, z) => new THREE.Vector3(x, y, z).normalize();
+const HAND_SIZE = 0.16, GRIP_AXES = { long: { Right: N(0, 1, 0.25), Left: N(0, 0, 1) }, pistol: { Right: N(0, 1, 0.25), Left: N(0, 1, 0.25) } };
+// which way each wrist leaves its fist (gun space, +x = the figure's left): right hand back from the grip, left hand
+// under the fore-end with the forearm coming from below and the left
+const GRIP_WRISTS = { long: { Right: N(-0.25, -0.45, -1), Left: N(0.75, -0.65, -0.35) }, pistol: { Right: N(-0.25, -0.45, -1), Left: N(0.7, -0.35, -0.8) } };
+const fistMats = new Map();
+function fistMat(skin) { if (!fistMats.has(skin)) fistMats.set(skin, new THREE.MeshStandardMaterial({ color: skin, map: MODELS.hand.map, roughness: 0.85, metalness: 0 })); return fistMats.get(skin); }
 export const FIGURE_SKIN = { hood: '#7b4b2f', cap: '#b9875f', bandana: '#4f2f1d', hitman: '#d9ac8a', sicario: '#1d1d20', cop: '#4b2c1c' };
 const rbCache = new Map();
 /** Soft-edged box so parts read as molded rather than voxel. */
@@ -190,7 +200,7 @@ export class CharacterModel {
     // painted: gunmetal-grey plates with the crew colour on the pouches, collar and helmet band
     this.armorMat = painted ? matteMat('#' + new THREE.Color('#34373b').lerp(new THREE.Color(base), 0.18).getHexString()) : P(1).clone(); if (!painted) { this.armorMat.color.multiplyScalar(0.45); this.armorMat.roughness = 0.55; }
     this.armorTrim = painted ? matteMat(base, 0.9) : this.armorMat;
-    if (tpl) { const fig = new Figure(tpl, painted ? paintedMat(tpl.userData.paint, base) : P(1), s); if (fig.ok) { this.group.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = fig; this.group.add(fig.root); } }
+    if (tpl) { const fig = new Figure(tpl, painted ? paintedMat(tpl.userData.paint, base) : P(1), s); if (fig.ok) { this.group.traverse((o) => { if (o.isMesh) o.visible = false; }); this.figure = fig; this.group.add(fig.root); if (painted && MODELS.hand) fig.setFists(MODELS.hand, fistMat(this.skinTone), this.group, HAND_SIZE * s); } }
   }
   setGun(weapon) {
     if (this.gunMesh && this.gunMesh.parent) this.gunMesh.parent.remove(this.gunMesh);
@@ -202,7 +212,13 @@ export class CharacterModel {
       // bullets start at the eye, the muzzle only places tracers and flashes (grips scale with the gun).
       if (this.figure) this.gunMesh.scale.setScalar(TP_GUN_SCALE);
     }
-    if (weapon) { const d = weapon.model, h = d.h, len = d.len; this.grips = d.pistol
+    // generated guns: hand points read off the mesh (models.js gripPoints), so the fists close on the real grip and
+    // fore-end; the box guns (and any mesh it can't read) keep the old points from the model dims
+    const gp = weapon && MODELS.guns.get(weapon.id) ? gripPoints(MODELS.guns.get(weapon.id).profile, weapon.model) : null;
+    if (gp) { const P = gp.grip.clone(); this.grips = { Right: P,
+        Left: gp.fore ? gp.fore.clone().add(new THREE.Vector3(0, 0.025, 0)) : P.clone().add(new THREE.Vector3(0.03, -0.035, 0.012)),
+        mag: gp.mag ? gp.mag.clone() : P.clone().add(new THREE.Vector3(0, -0.08, 0)) }; }
+    else if (weapon) { const d = weapon.model, h = d.h, len = d.len; this.grips = d.pistol
       ? { Right: new THREE.Vector3(0, -h * 0.3 - 0.06, len * 0.25), Left: new THREE.Vector3(0.035, -h * 0.3 - 0.09, len * 0.2), mag: new THREE.Vector3(0, -h * 0.3 - 0.16, len * 0.25) }
       : { Right: new THREE.Vector3(0, -h / 2 - 0.05, len * 0.22), Left: new THREE.Vector3(0, -h * 0.35, Math.min(len * 0.42, len - 0.05)), mag: new THREE.Vector3(0, -h / 2 - 0.2, len * 0.42) }; }
   }
@@ -270,7 +286,7 @@ export class CharacterModel {
   _applyFigure(st) {
     if (this.figure && (st.jugg || this.figure.armor)) this.figure.setArmor(!!st.jugg && !st.dead, this.armorMat, this.armorTrim);
     if (!this.figure) return;
-    const hands = !st.dead && this.gunMesh && this.grips && !this._drop ? { obj: this.gunMesh, Right: this.grips.Right, Left: st.reloading ? this._reloadHand(st) : this.grips.Left } : null;
+    const hands = !st.dead && this.gunMesh && this.grips && !this._drop ? { obj: this.gunMesh, Right: this.grips.Right, Left: st.reloading ? this._reloadHand(st) : this.grips.Left, axes: st.reloading || this.gunIsPistol ? GRIP_AXES.pistol : GRIP_AXES.long, wrists: st.reloading || this.gunIsPistol ? GRIP_WRISTS.pistol : GRIP_WRISTS.long } : null;
     this.figure.apply(this, hands);
   }
   _reloadHand(st) { const v = (this._rh || (this._rh = new THREE.Vector3())).copy(this.grips.mag); v.y += Math.sin((st.reloadT || 0) * 9) * 0.06; return v; }

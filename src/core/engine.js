@@ -4,7 +4,7 @@ import { tex, skyGradient, roomPanorama, setTextureDetail } from './textures.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { setGunEnvironment, setPlasticQuality } from '../game/character.js';
 // toy reskin: view-model lights were tuned to lift dark metal guns; coloured plastic needs far less
-const VM_PLASTIC = 0.55;
+const VM_PLASTIC = 0.45; // painted guns and arms in first person: lower than the old plastic (0.55) so dry-brushed edges don't glare
 
 export class Engine {
   constructor(canvas) {

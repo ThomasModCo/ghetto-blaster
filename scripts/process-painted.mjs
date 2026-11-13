@@ -30,7 +30,7 @@ function ext(ps, axis, lo, hi) { let mn = 1e9, mx = -1e9, sy = 0, n = 0; for (co
 const bbox = (ps) => { const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9]; for (const p of ps) for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], p[i]); mx[i] = Math.max(mx[i], p[i]); } return { mn, mx }; };
 
 /** Magenta key -> greyscale garment + alpha mask. Returns the share of texels that were keyed. */
-async function paintTexture(doc, size, keyed, soften = false) {
+async function paintTexture(doc, size, keyed, soften = false, shadeFile = null) {
   const root = doc.getRoot(); const tex = root.listTextures()[0]; if (!tex) throw new Error('no texture');
   const src = sharp(Buffer.from(tex.getImage())).resize(size, size, { fit: 'fill' });
   const { data, info } = await src.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -38,7 +38,9 @@ async function paintTexture(doc, size, keyed, soften = false) {
   // guns: the dry-brushed silver edges read as zebra stripes in first person, so compress the highlights
   if (soften) for (let i = 0; i < info.width * info.height; i++) {
     const r = data[i * 4] / 255, g = data[i * 4 + 1] / 255, b = data[i * 4 + 2] / 255, L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    if (L <= 0.36) continue; const k = (0.36 + (L - 0.36) * 0.3) / L;
+    // metal edges only (near-grey): wood, paint and coloured furniture keep their brightness
+    const mx = Math.max(r, g, b), sat = mx > 0 ? (mx - Math.min(r, g, b)) / mx : 0, wgt = Math.max(0, 1 - sat / 0.28);
+    if (L <= 0.22 || wgt <= 0) continue; const k = 1 + ((0.22 + (L - 0.22) * 0.22) / L - 1) * wgt;
     data[i * 4] = Math.round(r * k * 255); data[i * 4 + 1] = Math.round(g * k * 255); data[i * 4 + 2] = Math.round(b * k * 255);
   }
   if (keyed) {
@@ -54,15 +56,31 @@ async function paintTexture(doc, size, keyed, soften = false) {
     // reference brightness of the garment: 85th percentile of keyed texels' value
     const vs = []; for (let i = 0; i < n; i++) if (w[i] > 0.9) vs.push(val[i]); vs.sort((a, b) => a - b);
     const ref = vs.length ? vs[Math.floor(vs.length * 0.85)] : 1; share = vs.length / n;
+    // shading for the garment: the magenta key was painted nearly flat, so a retexture of the same mesh (same UVs)
+    // with the garment painted as washed and highlighted grey fabric supplies it (2026-11-13). Without it, the
+    // key's own brightness is used.
+    let sh = null, sref = 1;
+    if (shadeFile && fs.existsSync(shadeFile)) {
+      const S = await sharp(shadeFile).resize(info.width, info.height, { fit: 'fill' }).removeAlpha().raw().toBuffer();
+      sh = new Float32Array(n); const ls = [];
+      for (let i = 0; i < n; i++) { sh[i] = (0.2126 * S[i * 3] + 0.7152 * S[i * 3 + 1] + 0.0722 * S[i * 3 + 2]) / 255; if (w[i] > 0.9) ls.push(sh[i]); }
+      ls.sort((a, b) => a - b); sref = ls.length ? ls[Math.floor(ls.length * 0.9)] : 1;
+      // keep the folds, wash and highlights but drop the retexture's broad light and dark patches: divide by a blur
+      // of the shade taken over the garment only
+      const W8 = Buffer.alloc(n), S8 = Buffer.alloc(n); for (let i = 0; i < n; i++) { W8[i] = Math.round(w[i] * 255); S8[i] = Math.round(Math.min(1, sh[i]) * w[i] * 255); }
+      const sig = Math.max(2, info.width / 80), raw = { raw: { width: info.width, height: info.height, channels: 1 } };
+      const bw = await sharp(W8, raw).blur(sig).raw().toBuffer(), bs = await sharp(S8, raw).blur(sig).raw().toBuffer();
+      for (let i = 0; i < n; i++) { const m = bw[i] > 8 ? bs[i] / bw[i] : sh[i]; sh[i] = Math.max(-0.5, Math.min(0.35, sh[i] / Math.max(0.08, m) - 1)); } // detail around 0
+    }
     for (let i = 0; i < n; i++) {
       if (w[i] <= 0) continue;
-      const grey = Math.min(1, (val[i] / ref) * 0.9) * 255; // lit garment ~0.9, wash and shadows darker
+      const grey = Math.min(1, sh ? 0.8 * (1 + 0.75 * sh[i]) : (val[i] / ref) * 0.9) * 255; // with a shade source, an even base (the key varies in brightness from island to island) plus its folds // lit garment ~0.9, wash and shadows darker
       for (let c = 0; c < 3; c++) data[i * 4 + c] = Math.round(data[i * 4 + c] * (1 - w[i]) + grey * w[i]);
       data[i * 4 + 3] = Math.round(255 * (1 - w[i]));
     }
   }
   const out = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
-    .webp(keyed ? { quality: 86, alphaQuality: 90, effort: 6 } : { quality: 84, effort: 6 }).toBuffer();
+    .webp(keyed ? { quality: 86, alphaQuality: 90, effort: 6, exact: true } : { quality: 84, effort: 6 }).toBuffer(); // exact: libwebp otherwise throws away the colour under alpha 0, which is the shaded garment
   // webp without alpha when nothing is keyed (decodes as alpha 1 = keep the paint)
   const final = keyed ? out : await sharp(out).removeAlpha().webp({ quality: 84, effort: 6 }).toBuffer();
   tex.setImage(new Uint8Array(final)).setMimeType('image/webp');
@@ -83,7 +101,7 @@ for (const f of fs.readdirSync(RAW).filter((x) => x.endsWith('.glb'))) {
   const id = f.replace('.glb', ''); if (ONLY && !ONLY.includes(id)) continue;
   const doc = await io.read(`${RAW}/${f}`);
   if (id.startsWith('fig_')) {
-    const share = await paintTexture(doc, TEX.fig, true);
+    const share = await paintTexture(doc, TEX.fig, true, false, `${process.env.SHADE || 'shade'}/${id}.png`);
     const sz = await finish(doc, `${id}.glb`); manifest.figures[id.slice(4)] = { file: `models/${id}.glb`, painted: true };
     console.log(id, sz, 'garment', (share * 100).toFixed(1) + '%'); continue;
   }

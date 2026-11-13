@@ -13,6 +13,7 @@ const V = () => new THREE.Vector3(), Q = () => new THREE.Quaternion();
 const Y = new THREE.Vector3(0, 1, 0);
 const _m = new THREE.Matrix4(), _invG = new THREE.Matrix4(), _p = V(), _s = V(), _q = Q(), _q2 = Q(), _q3 = Q();
 const _a = V(), _t = V(), _e = V(), _d = V(), _n = V(), _pole = V(), _tmp = V(), _tw1 = V(), _tw2 = V(), _tw3 = V(), _bend = V();
+const _gq = Q(), _q1 = Q(), _ax = V(), _sh = V(), _w1 = V(), _c = V(); // fist placement
 
 export class Figure {
   constructor(template, material, scale = 1) {
@@ -46,6 +47,19 @@ export class Figure {
     // step length: the box rig swings 0.95 m legs; scale that to this figure's hip height, then shorten a touch more
     this.stepK = Math.min(1, ((this.rest.LeftUpLeg.p.y + this.rest.RightUpLeg.p.y) / 2) / (0.95 * scale)) * 0.8;
     this.posScale = 1 / this.b.Hips.parent.matrixWorld.getMaxScaleOnAxis(); // group metres -> Armature units (cm)
+  }
+  /** Painted gripping fists (MODELS.hand) that replace the open hands while they hold the gun. The rig has no finger
+   *  bones, so the open hand is shrunk into the wrist and a fist mesh is placed round the grip instead. Visual only. */
+  setFists(hand, material, parent, size) {
+    if (!this.ok || !hand) return;
+    this.fists = {};
+    for (const side of ['Right', 'Left']) {
+      const m = new THREE.Mesh(hand.geo, material), mir = side === 'Left' ? -1 : 1; // left fist = the right one mirrored
+      m.scale.set(size * mir, size, size); m.castShadow = true; m.visible = false; m.frustumCulled = false;
+      // the fist's frame after the mirror: the handle axis and the direction to the wrist cut
+      m.userData.g = hand.grip.clone().multiply(new THREE.Vector3(mir, 1, 1)).normalize(); m.userData.w = hand.wrist.clone().multiply(new THREE.Vector3(mir, 1, 1)).normalize();
+      m.userData.wd = hand.wristDist * size * 0.8; m.userData.tun = (hand.tunnel || V()).clone().multiply(new THREE.Vector3(mir, 1, 1)).multiplyScalar(size); parent.add(m); this.fists[side] = m;
+    }
   }
   /** Trap House Armor: a molded plate carrier, shoulder plates and a helmet, parented to the chest, arm and head
    *  bones so they follow the pose. Built lazily the first time the streak is active. */
@@ -107,6 +121,19 @@ export class Figure {
     this._aim(upper, _tmp.subVectors(_e, _a), _bend);
     this._aim(lower, _d.subVectors(target, _e), _bend);
   }
+  /** Fist centre on the grip point t (group space): its handle axis along the gun's (grip up, or the fore-end forward),
+   *  then turned about that axis so the wrist points the way the forearm comes in (hands.wrists, gun space; else the
+   *  shoulder). Moves t to the fist's wrist, a little inside it so the sleeve covers the cut. */
+  _placeFist(fist, hands, side, t) {
+    _m.multiplyMatrices(_invG, hands.obj.matrixWorld); _m.decompose(_p, _gq, _s);
+    const ax = _ax.copy((hands.axes && hands.axes[side]) || Y).applyQuaternion(_gq).normalize();
+    _q1.setFromUnitVectors(fist.userData.g, ax);
+    if (hands.wrists && hands.wrists[side]) _sh.copy(hands.wrists[side]).applyQuaternion(_gq); else { this._pos(side + 'Arm', _sh); _sh.sub(t); } // preferred wrist side, gun space
+    _w1.copy(fist.userData.w).applyQuaternion(_q1); _w1.addScaledVector(ax, -_w1.dot(ax)); _sh.addScaledVector(ax, -_sh.dot(ax));
+    if (_w1.lengthSq() > 1e-8 && _sh.lengthSq() > 1e-8) { _w1.normalize(); _sh.normalize(); _q2.setFromAxisAngle(ax, Math.atan2(_c.crossVectors(_w1, _sh).dot(ax), _w1.dot(_sh))); } else _q2.identity();
+    fist.quaternion.multiplyQuaternions(_q2, _q1); fist.position.copy(t).sub(_c.copy(fist.userData.tun).applyQuaternion(fist.quaternion)); // handle through the curled fingers
+    t.copy(fist.position).addScaledVector(_w1.copy(fist.userData.w).applyQuaternion(fist.quaternion), fist.userData.wd);
+  }
   /**
    * cm: the CharacterModel (pivots already posed this frame). hands: { obj, Right, Left } grip points in obj's local
    * space (the gun mesh), or null so the hands follow the box arms. Feet follow the box legs' soles.
@@ -129,6 +156,9 @@ export class Figure {
     for (const side of ['Right', 'Left']) {
       const sgn = side === 'Right' ? -1 : 1, arm = side === 'Right' ? cm.armR : cm.armL;
       if (hands && hands[side]) this._driverPos(hands.obj, hands[side], _t); else this._driverPos(arm, _tmp.set(0, -0.62 * cm.scale, 0), _t);
+      const fist = this.fists && this.fists[side], grip = !!(fist && hands && hands[side]);
+      if (fist) { fist.visible = grip; b[side + 'Hand'].scale.setScalar(grip ? 0.02 : 1); }
+      if (grip) this._placeFist(fist, hands, side, _t); // the wrist (IK target) moves to the fist's wrist end
       this._pos(side + 'Arm', _pole); _pole.add(_e.set(sgn * 0.45, -0.8, -0.55).applyQuaternion(qt));
       this._ik(side + 'Arm', side + 'ForeArm', this.len[side], _t, _pole);
       b[side + 'Hand'].quaternion.copy(R[side + 'Hand'].lq); b[side + 'Hand'].updateMatrixWorld(true);

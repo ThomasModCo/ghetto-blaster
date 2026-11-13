@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { World, Box } from '../core/physics.js';
 import { NavGrid } from './nav.js';
-import { tex, normalFor } from '../core/textures.js';
+import { tex, normalFor, paintDetailTexture } from '../core/textures.js';
 import { RNG } from '../core/rng.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { chamferBox, scaleFaceUVs, splitGroups, trimColor, windowFrameGeo, facadeWindows } from './kit.js';
@@ -11,15 +11,36 @@ import { MODELS, propMaterial } from '../game/models.js';
 
 const matCache = new Map();
 export function mat(name, params = {}, extra = {}) {
-  const key = name + JSON.stringify(params) + JSON.stringify(extra);
+  const key = name + JSON.stringify(params) + JSON.stringify(extra) + (name === 'color' && paintDetailTexture() ? 'p' : '');
   if (matCache.has(key)) return matCache.get(key);
   let m;
   // playset: everything is cast or molded, so nothing is fully matte (caps roughness for a soft sheen)
-  if (name === 'color') m = new THREE.MeshStandardMaterial({ color: new THREE.Color(params.color || '#888'), roughness: Math.min(0.72, params.rough ?? 0.85), metalness: params.metal ?? 0.05, ...extra });
+  if (name === 'color') { m = new THREE.MeshStandardMaterial({ color: new THREE.Color(params.color || '#888'), roughness: Math.min(0.72, params.rough ?? 0.85), metalness: params.metal ?? 0.05, ...extra }); if (!Object.keys(extra).length) worldPaint(m); }
   else { const map = tex(name, params); m = new THREE.MeshStandardMaterial({ map, roughness: Math.min(0.78, params.rough ?? 0.9), metalness: params.metal ?? 0.02, ...extra }); const nm = normalFor(map); if (nm) { m.normalMap = nm; m.normalScale.set(0.9, 0.9); } }
   m.userData.params = params; matCache.set(key, m); return m;
 }
 const col = (c, r = 0.85, mt = 0.05) => mat('color', { color: c, rough: r, metal: mt });
+/** Plain-colour kit pieces (boxes, walls, plinths, poles) have no UVs worth tiling, so they get the painted masonry
+ *  detail in world space: projected along the face's main axis at about 2 m per tile and modulating their colour,
+ *  so they read as painted scenery like the textured surfaces. Visual only; skipped before the overlays load. */
+function worldPaint(m) {
+  const t = paintDetailTexture(); if (!t) return;
+  const u = { uPaintDetail: { value: t } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = 'varying vec3 vPaintP; varying vec3 vPaintN;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+      vec4 paintW = vec4( transformed, 1.0 );
+      #ifdef USE_INSTANCING
+        paintW = instanceMatrix * paintW;
+      #endif
+      paintW = modelMatrix * paintW; vPaintP = paintW.xyz; vPaintN = normalize( mat3( modelMatrix ) * objectNormal );`);
+    sh.fragmentShader = 'uniform sampler2D uPaintDetail; varying vec3 vPaintP; varying vec3 vPaintN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      { vec3 an = abs( vPaintN ); vec2 puv = an.x > an.y && an.x > an.z ? vPaintP.zy : ( an.y > an.z ? vPaintP.xz : vPaintP.xy );
+        float pd = texture2D( uPaintDetail, puv * 0.45 ).r;
+        diffuseColor.rgb *= 1.0 + 0.9 * ( pd - 0.5 ); }`); // modulate (not overlay): white kit pieces get it too
+  };
+  m.customProgramCacheKey = () => 'world-paint';
+}
 /** Tiled copy of a textured material. Repeats snap to quarter steps and copies are shared, so walls with the same
  *  texture and similar size end up with the same material and merge into one draw call. */
 const repeatCache = new Map();
